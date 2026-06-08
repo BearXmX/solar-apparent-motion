@@ -524,7 +524,7 @@ const currentView = ref<ViewPreset>('standard')
 const controlMode = ref<ControlMode>('god')
 const playerViewMode = ref<PlayerViewMode>('third')
 const isPlayerReady = ref(false)
-const selectedPlayerModel = ref<PlayerModelKey>('tommy')
+const selectedPlayerModel = ref<PlayerModelKey>('ant')
 
 const state = reactive({
   latitude: 31.23,
