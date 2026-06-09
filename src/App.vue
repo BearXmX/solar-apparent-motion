@@ -29,7 +29,7 @@
 
         <div class="block">
           <h3>① 观测地点</h3>
-          <RangeRow label="纬度" :value="state.latitude" suffix="°" :min="-90" :max="90" :step="1" @update:value="state.latitude = $event" />
+          <RangeRow label="纬度" :value="state.latitude" suffix="°" :min="-90" :max="90" :step="0.1" @update:value="state.latitude = $event" />
           <div class="grid-2">
             <button :class="{ active: isApprox(state.latitude, 0) }" @click="state.latitude = 0">赤道</button>
             <button :class="{ active: isApprox(state.latitude, 23.44) }" @click="state.latitude = 23.44">北回归线</button>
@@ -147,7 +147,7 @@
           <span>{{ sceneSubtitle }}</span>
         </div>
 
-        <div class="legend-panel">
+        <!--         <div class="legend-panel">
           <div class="legend-title">图例</div>
           <div><i class="dot yellow"></i> 当前太阳</div>
           <div><i class="dot current"></i> 当前日期路径</div>
@@ -157,7 +157,7 @@
           <div><i class="dot shadow"></i> 太阳定向光原生阴影</div>
           <div><i class="dot current"></i> 太阳高度角扫描</div>
           <div><i class="dot playground"></i> 城市群与道路</div>
-        </div>
+        </div> -->
       </section>
 
       <aside class="panel right-panel">
