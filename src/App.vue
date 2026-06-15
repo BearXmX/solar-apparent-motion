@@ -457,6 +457,35 @@ const PLAYER_BOUNDARY_CONFIG = {
   wallThickness: 0.02,
 }
 
+const CITY_PERFORMANCE_CONFIG = {
+  // 城市密度：玩家模式要保留阴影，所以优先减少可投影物体数量。
+  buildingsInBlock: 2,
+  modernTowerBlockIndexes: [4],
+  roadsideTreeStep: 2.4,
+  streetLampStep: 2.76,
+  enableParkTrees: false,
+
+  // 树木参与原生阴影投射：树干、树枝、树冠、底盘全部投影。
+  treeCastShadow: true,
+
+  // 树木保留碰撞体，但碰撞体只用一个简化 box，避免树冠/树枝生成复杂 collider。
+  enableTreeColliders: true,
+  treeColliderWidthRatio: 0.76,
+  treeColliderHeightRatio: 1.8,
+
+  // 清晰度回调：上一版为了性能关闭抗锯齿、DPR 压到 1，会让画面发糊/锯齿明显。
+  // 这里保留性能优化，但把 DPR 和阴影贴图适当拉回，画面更清楚。
+  playerDpr: 1.2,
+  godDpr: 1.35,
+  pathStepsPlayer: 96,
+  pathStepsGod: 128,
+
+  // 保留玩家模式阴影，但降低 shadowMap 更新频率，避免每帧重算阴影。
+  playerShadowUpdateInterval: 220,
+  godShadowUpdateInterval: 120,
+  shadowMapSize: 768,
+}
+
 const THIRD_PERSON_CAMERA_CONFIG = {
   // 后上方第三人称：更贴近玩家，但仍能看到完整人物和前方街道。
   distance: 1.75,
@@ -560,15 +589,16 @@ let lastTime = 0
 let frameCount = 0
 let runtimeSolarTime = state.solarTime
 let lastSolarTimeUiSync = 0
-const SOLAR_TIME_UI_SYNC_INTERVAL = 16
+const SOLAR_TIME_UI_SYNC_INTERVAL = 120
 // 性能优化：太阳影子、天空、城市灯光、雷达扫描不需要每帧全部重建。
 let lastShadowUpdateTime = 0
 let lastGaugeUpdateTime = 0
 let lastSkyAndCityUpdateTime = 0
-const SHADOW_UPDATE_INTERVAL = 130
-const PLAYER_SHADOW_UPDATE_INTERVAL = 999999
+const SHADOW_UPDATE_INTERVAL = CITY_PERFORMANCE_CONFIG.godShadowUpdateInterval
+const PLAYER_SHADOW_UPDATE_INTERVAL = CITY_PERFORMANCE_CONFIG.playerShadowUpdateInterval
 const GAUGE_UPDATE_INTERVAL = 240
-const SKY_CITY_UPDATE_INTERVAL = 16
+const SKY_CITY_UPDATE_INTERVAL = 120
+let rebuildPathTimer = 0
 
 let rootGroup: THREE.Group
 let domeGroup: THREE.Group
@@ -1519,6 +1549,8 @@ function setPlayerInputEnabled(enabled: boolean) {
 function applyControlMode() {
   if (!renderer || !controls) return
 
+  renderer.setPixelRatio(getRendererPixelRatio())
+
   const isPlayerMode = controlMode.value === 'player' && isPlayerReady.value
 
   // 第三人称让库接管 OrbitControls；第一人称关闭 OrbitControls，防止鼠标控制打架。
@@ -1629,16 +1661,24 @@ function initThree() {
   camera = new THREE.PerspectiveCamera(46, width / height, 0.1, 100)
   camera.position.set(7.6, 5.2, 8.6)
 
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+  renderer = new THREE.WebGLRenderer({
+    // 保持抗锯齿，避免上一版画面边缘发虚、路径线和建筑轮廓不清晰。
+    antialias: true,
+    alpha: true,
+    powerPreference: 'high-performance',
+  })
   renderer.setPixelRatio(getRendererPixelRatio())
   renderer.setSize(width, height, false)
   renderer.setClearColor(0x061022, 0)
+  renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1.04
 
   // v38：启用 Three.js 原生阴影。太阳方向由 keyLight 绑定太阳位置来控制。
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFShadowMap
-  // 太阳视运动需要影子连续变化，这里恢复每帧更新原生阴影。
-  renderer.shadowMap.autoUpdate = true
+  // 保留原生阴影，但关闭每帧自动重算，改由 syncThreeJsSunShadow 按频率更新。
+  renderer.shadowMap.autoUpdate = false
   renderer.domElement.style.width = '100%'
   renderer.domElement.style.height = '100%'
   canvasWrapRef.value.appendChild(renderer.domElement)
@@ -1659,7 +1699,7 @@ function initThree() {
   keyLight = new THREE.DirectionalLight(0xffe6a3, 1.75)
   keyLight.position.set(4, 8, 5)
   keyLight.castShadow = true
-  keyLight.shadow.mapSize.set(640, 640)
+  keyLight.shadow.mapSize.set(CITY_PERFORMANCE_CONFIG.shadowMapSize, CITY_PERFORMANCE_CONFIG.shadowMapSize)
   keyLight.shadow.camera.near = 0.5
   keyLight.shadow.camera.far = 26
   keyLight.shadow.camera.left = -7.2
@@ -1720,6 +1760,18 @@ function applyMeshShadowSettings(root: THREE.Object3D) {
     const mesh = obj as THREE.Mesh
     if (!mesh.isMesh) return
 
+    if (mesh.userData.performanceNoCastShadow) {
+      mesh.castShadow = false
+      mesh.receiveShadow = true
+      return
+    }
+
+    if (mesh.userData.forceCastShadow) {
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      return
+    }
+
     const material = mesh.material
     const materials = Array.isArray(material) ? material : [material]
     const canUseShadow = materials.some(
@@ -1762,6 +1814,7 @@ function syncThreeJsSunShadow(metrics: SolarMetrics) {
   const isShadowVisible = layers.shadow && metrics.altitude > 1
   keyLight.castShadow = isShadowVisible
   renderer.shadowMap.enabled = isShadowVisible
+  renderer.shadowMap.autoUpdate = false
 
   // 太阳高度低时阴影更长；Three.js 阴影用定向光生成，方向与太阳位置绑定。
   const sunDir = solarToPosition(metrics, 1).normalize()
@@ -1773,7 +1826,13 @@ function syncThreeJsSunShadow(metrics: SolarMetrics) {
 
   const dayK = smoothstep(-2, 30, metrics.altitude)
   keyLight.intensity = isShadowVisible ? 1.35 + dayK * 2.05 : 0.14
-  // renderer.shadowMap.needsUpdate = true
+
+  const now = performance.now()
+  const interval = controlMode.value === 'player' ? PLAYER_SHADOW_UPDATE_INTERVAL : SHADOW_UPDATE_INTERVAL
+  if (isShadowVisible && now - lastShadowUpdateTime >= interval) {
+    lastShadowUpdateTime = now
+    renderer.shadowMap.needsUpdate = true
+  }
 }
 
 function createCircularBoundaryColliders() {
@@ -1950,12 +2009,12 @@ type CityBuildingOpts = {
   floors?: number
 }
 
-const buildingsInBlock = 8
+const buildingsInBlock = CITY_PERFORMANCE_CONFIG.buildingsInBlock
 
 function createCityBlocks() {
   const blockCenters = [-3.75, 0, 3.75]
   const palettes = [0x8ecae6, 0xffb703, 0xfb8500, 0xbde0fe, 0xcdb4db, 0xa7c957, 0xffafcc, 0x90dbf4, 0xfed9b7, 0x98f5e1, 0xf4a261, 0xa5b4fc]
-  const modernTowerBlocks = new Set([4, 5, 7])
+  const modernTowerBlocks = new Set(CITY_PERFORMANCE_CONFIG.modernTowerBlockIndexes)
   let blockIndex = 0
 
   for (const z of blockCenters) {
@@ -2217,8 +2276,10 @@ function createPocketPark(x: number, z: number, radius = 0.34) {
   park.rotation.x = -Math.PI / 2
   park.position.set(x, 0.096, z)
   schoolGroup.add(park)
-  createTree(x - radius * 0.35, z, 0.28)
-  createTree(x + radius * 0.28, z + radius * 0.16, 0.24)
+  if (CITY_PERFORMANCE_CONFIG.enableParkTrees) {
+    createTree(x - radius * 0.35, z, 0.28)
+    createTree(x + radius * 0.28, z + radius * 0.16, 0.24)
+  }
 }
 
 function createSmallPlaza(x: number, z: number) {
@@ -2239,7 +2300,7 @@ function createRoadsideTreeBelts() {
   const positions: Array<[number, number]> = []
 
   for (const roadOffset of roadOffsets) {
-    for (let t = -5.25; t <= 5.25; t += 1.25) {
+    for (let t = -5.25; t <= 5.25; t += CITY_PERFORMANCE_CONFIG.roadsideTreeStep) {
       if (roadOffsets.some(offset => Math.abs(t - offset) < 0.42)) continue
       positions.push([roadOffset - treeOffset, t], [roadOffset + treeOffset, t])
       positions.push([t, roadOffset - treeOffset], [t, roadOffset + treeOffset])
@@ -2258,7 +2319,7 @@ function createCityTimeElements() {
   const lampOffset = 0.52
 
   for (const roadOffset of roadOffsets) {
-    for (let t = -5.25; t <= 5.25; t += 1.38) {
+    for (let t = -5.25; t <= 5.25; t += CITY_PERFORMANCE_CONFIG.streetLampStep) {
       if (roadOffsets.some(offset => Math.abs(t - offset) < 0.4)) continue
       createStreetLamp(roadOffset - lampOffset, t, 0)
       createStreetLamp(roadOffset + lampOffset, t, Math.PI)
@@ -2497,6 +2558,7 @@ function createTree(x: number, z: number, scale = 0.46) {
     new THREE.MeshStandardMaterial({ color: 0x7a4a2a, roughness: 0.86 }),
   )
   trunk.position.y = trunkHeight / 2
+  trunk.userData.forceCastShadow = CITY_PERFORMANCE_CONFIG.treeCastShadow
   tree.add(trunk)
 
   // 树枝：斜向伸出，不再是“一根棍子”。
@@ -2507,6 +2569,7 @@ function createTree(x: number, z: number, scale = 0.46) {
     branch.position.set(Math.sin(angle) * scale * 0.12, trunkHeight * (0.66 + (i % 2) * 0.08), Math.cos(angle) * scale * 0.12)
     branch.rotation.z = Math.sin(angle) * 0.48
     branch.rotation.x = Math.cos(angle) * 0.48
+    branch.userData.forceCastShadow = CITY_PERFORMANCE_CONFIG.treeCastShadow
     tree.add(branch)
   })
 
@@ -2524,6 +2587,7 @@ function createTree(x: number, z: number, scale = 0.46) {
     const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(c.r, 1), leafMaterial(c.color!))
     crown.position.set(c.x, c.y, c.z)
     crown.rotation.set(i * 0.25, i * 0.45, i * 0.18)
+    crown.userData.forceCastShadow = CITY_PERFORMANCE_CONFIG.treeCastShadow
     tree.add(crown)
   })
 
@@ -2534,10 +2598,29 @@ function createTree(x: number, z: number, scale = 0.46) {
   )
   base.rotation.x = -Math.PI / 2
   base.position.y = 0.006
+  base.userData.forceCastShadow = CITY_PERFORMANCE_CONFIG.treeCastShadow
   tree.add(base)
 
+  tree.traverse(obj => {
+    const mesh = obj as THREE.Mesh
+    if (!mesh.isMesh) return
+
+    // 用户要求树木所有部件都参与原生投影：树干、树枝、树冠、树下底盘全部 castShadow。
+    mesh.castShadow = CITY_PERFORMANCE_CONFIG.treeCastShadow
+    mesh.receiveShadow = true
+  })
+
   schoolGroup.add(tree)
-  addShadowCaster(x, z, scale * 0.62, scale * 0.62, trunkHeight + scale * 0.42)
+
+  // 树木需要能挡住玩家，但不要把每个树枝/树冠都做成 collider。
+  // 用一个简化盒状碰撞体包住树干和主要树冠，手感稳定，性能压力也小。
+  if (CITY_PERFORMANCE_CONFIG.enableTreeColliders) {
+    const colliderSize = Math.max(0.18, scale * CITY_PERFORMANCE_CONFIG.treeColliderWidthRatio)
+    const colliderHeight = Math.max(0.42, scale * CITY_PERFORMANCE_CONFIG.treeColliderHeightRatio)
+    addColliderBox(x, GROUND_SURFACE_Y + colliderHeight / 2, z, colliderSize, colliderHeight, colliderSize)
+  }
+
+  // 树木会参与原生投影：树干、树枝、树冠、树下底盘全部 castShadow。
 }
 
 function addShadowCaster(x: number, z: number, width: number, depth: number, height: number, target?: THREE.Object3D) {
@@ -2761,7 +2844,7 @@ function buildSunPathPoints(latitude: number, dayOfYear: number) {
 
   const start = m.polarType === '极昼' ? 0 : m.sunrise
   const end = m.polarType === '极昼' ? 24 : m.sunset
-  const steps = 180
+  const steps = controlMode.value === 'player' ? CITY_PERFORMANCE_CONFIG.pathStepsPlayer : CITY_PERFORMANCE_CONFIG.pathStepsGod
 
   for (let i = 0; i <= steps; i++) {
     const t = start + ((end - start) * i) / steps
@@ -3191,14 +3274,18 @@ function applyLayerVisibility() {
     const isShadowVisible = layers.shadow && metrics.altitude > 1
     keyLight.castShadow = isShadowVisible
     renderer.shadowMap.enabled = isShadowVisible
-    // renderer.shadowMap.needsUpdate = true
+    if (isShadowVisible) {
+      lastShadowUpdateTime = 0
+      renderer.shadowMap.needsUpdate = true
+    }
   }
 }
 
 function getRendererPixelRatio() {
-  // 玩家版优先保证操控流畅。高分屏下 DPR 过高会让白天楼群、阴影、路径线渲染发卡。
-  // 这里限制到 1.5，优先保证“玩起来顺”。
-  return Math.min(window.devicePixelRatio || 1, 1.35)
+  // 玩家模式仍然限制 DPR，但不再压到 1，避免画面明显发糊。
+  const dpr = window.devicePixelRatio || 1
+  if (controlMode.value === 'player') return Math.min(dpr, CITY_PERFORMANCE_CONFIG.playerDpr)
+  return Math.min(dpr, CITY_PERFORMANCE_CONFIG.godDpr)
 }
 
 function resizeRenderer() {
@@ -3258,18 +3345,33 @@ function animate(now: number) {
   renderer?.render(scene, camera)
 }
 
+function scheduleRebuildSolarPaths() {
+  window.clearTimeout(rebuildPathTimer)
+  rebuildPathTimer = window.setTimeout(() => {
+    if (pathGroup) rebuildSolarPaths()
+    updateSceneBySolar()
+  }, 100)
+}
+
 watch(
   () => [state.latitude, state.dayOfYear],
   () => {
+    scheduleRebuildSolarPaths()
+  },
+)
+
+watch(
+  () => layers.paths,
+  () => {
     if (pathGroup) rebuildSolarPaths()
+    applyLayerVisibility()
     updateSceneBySolar()
   },
 )
 
 watch(
-  () => [layers.dome, layers.paths, layers.shadow, layers.rays, layers.altitudeGauge, layers.cityTime],
+  () => [layers.dome, layers.shadow, layers.rays, layers.altitudeGauge, layers.cityTime],
   () => {
-    if (pathGroup) rebuildSolarPaths()
     applyLayerVisibility()
     updateSceneBySolar()
   },
@@ -3289,6 +3391,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(animationId)
+  window.clearTimeout(rebuildPathTimer)
   resizeObserver?.disconnect()
   window.removeEventListener('resize', resizeRenderer)
   window.removeEventListener('keydown', handlePlayerKeyDown, true)
