@@ -1,8 +1,5 @@
 <template>
-  <section class="solar-motion-page" :class="`phase-${dayPhase}`" :style="pageSkyStyle">
-    <div class="bg-grid"></div>
-    <div class="scan-line"></div>
-
+  <section class="solar-motion-page" :class="`phase-${dayPhase}`">
     <header class="topbar">
       <div class="brand">
         <div class="sun-logo"></div>
@@ -29,7 +26,7 @@
 
         <div class="block">
           <h3>① 观测地点</h3>
-          <RangeRow label="纬度" :value="state.latitude" suffix="°" :min="-90" :max="90" :step="1" @update:value="state.latitude = $event" />
+          <RangeRow label="纬度" :value="state.latitude" suffix="°" :min="-90" :max="90" :step="0.1" @update:value="state.latitude = $event" />
           <div class="grid-2">
             <button :class="{ active: isApprox(state.latitude, 0) }" @click="state.latitude = 0">赤道</button>
             <button :class="{ active: isApprox(state.latitude, 23.44) }" @click="state.latitude = 23.44">北回归线</button>
@@ -60,20 +57,21 @@
             :min="0"
             :max="24"
             :step="0.05"
-            @update:value="state.solarTime = $event"
+            :formatter="formatSolarTimeCompact"
+            @update:value="setSolarTimeFromUser($event)"
           />
           <RangeRow label="动画速度" :value="state.playSpeed" suffix="x" :min="0.2" :max="8" :step="0.2" @update:value="state.playSpeed = $event" />
           <div class="time-buttons">
             <button
-              :class="{ active: !solarMetrics.polarType && isApprox(state.solarTime, solarMetrics.sunrise, 0.06) }"
+              :class="{ active: !solarMetrics.polarType && isApprox(runtimeSolarTimeRef, solarMetrics.sunrise, 0.06) }"
               :disabled="!!solarMetrics.polarType"
               @click="setSafeSolarTime(solarMetrics.sunrise)"
             >
               日出
             </button>
-            <button :class="{ active: isApprox(state.solarTime, 12, 0.06) }" @click="state.solarTime = 12">正午</button>
+            <button :class="{ active: isApprox(runtimeSolarTimeRef, 12, 0.06) }" @click="setSolarTimeFromUser(12)">正午</button>
             <button
-              :class="{ active: !solarMetrics.polarType && isApprox(state.solarTime, solarMetrics.sunset, 0.06) }"
+              :class="{ active: !solarMetrics.polarType && isApprox(runtimeSolarTimeRef, solarMetrics.sunset, 0.06) }"
               :disabled="!!solarMetrics.polarType"
               @click="setSafeSolarTime(solarMetrics.sunset)"
             >
@@ -147,7 +145,7 @@
           <span>{{ sceneSubtitle }}</span>
         </div>
 
-        <div class="legend-panel">
+        <!--         <div class="legend-panel">
           <div class="legend-title">图例</div>
           <div><i class="dot yellow"></i> 当前太阳</div>
           <div><i class="dot current"></i> 当前日期路径</div>
@@ -157,7 +155,7 @@
           <div><i class="dot shadow"></i> 太阳定向光原生阴影</div>
           <div><i class="dot current"></i> 太阳高度角扫描</div>
           <div><i class="dot playground"></i> 城市群与道路</div>
-        </div>
+        </div> -->
       </section>
 
       <aside class="panel right-panel">
@@ -172,7 +170,7 @@
             <span>太阳方位角 A</span><b>{{ formatDeg(solarMetrics.azimuth) }}</b>
           </div>
           <div class="big-row">
-            <span>地方太阳时</span><b>{{ formatClock(state.solarTime) }}</b>
+            <span>地方太阳时</span><b>{{ formatClock(runtimeSolarTimeRef) }}</b>
           </div>
           <div class="small-grid">
             <div>
@@ -221,7 +219,7 @@
           <div class="formula-item">
             <b>时角</b>
             <code>H = 15° × (地方太阳时 - 12)</code>
-            <span>太阳时={{ formatClock(state.solarTime) }}，H={{ formatDeg(solarMetrics.hourAngle) }}</span>
+            <span>太阳时={{ formatClock(runtimeSolarTimeRef) }}，H={{ formatDeg(solarMetrics.hourAngle) }}</span>
           </div>
           <div class="formula-item">
             <b>太阳高度</b>
@@ -457,6 +455,35 @@ const PLAYER_BOUNDARY_CONFIG = {
   wallThickness: 0.02,
 }
 
+const CITY_PERFORMANCE_CONFIG = {
+  // 城市密度：玩家模式要保留阴影，所以优先减少可投影物体数量。
+  buildingsInBlock: 2,
+  modernTowerBlockIndexes: [4],
+  roadsideTreeStep: 2.4,
+  streetLampStep: 2.76,
+  enableParkTrees: false,
+
+  // 树木参与原生阴影投射：树干、树枝、树冠、底盘全部投影。
+  treeCastShadow: true,
+
+  // 树木保留碰撞体，但碰撞体只用一个简化 box，避免树冠/树枝生成复杂 collider。
+  enableTreeColliders: true,
+  treeColliderWidthRatio: 0.76,
+  treeColliderHeightRatio: 1.8,
+
+  // 清晰度回调：上一版为了性能关闭抗锯齿、DPR 压到 1，会让画面发糊/锯齿明显。
+  // 这里保留性能优化，但把 DPR 和阴影贴图适当拉回，画面更清楚。
+  playerDpr: 1.2,
+  godDpr: 1.35,
+  pathStepsPlayer: 96,
+  pathStepsGod: 128,
+
+  // 保留玩家模式阴影，但降低 shadowMap 更新频率，避免每帧重算阴影。
+  playerShadowUpdateInterval: 220,
+  godShadowUpdateInterval: 120,
+  shadowMapSize: 768,
+}
+
 const THIRD_PERSON_CAMERA_CONFIG = {
   // 后上方第三人称：更贴近玩家，但仍能看到完整人物和前方街道。
   distance: 1.75,
@@ -491,10 +518,14 @@ const RangeRow = defineComponent({
     max: { type: Number, required: true },
     step: { type: Number, default: 1 },
     suffix: { type: String, default: '' },
+    formatter: { type: Function, default: null },
   },
   emits: ['update:value'],
   setup(props, { emit }) {
-    const formatValue = (value: number) => `${Number(value).toFixed(props.step < 1 ? 2 : 0)}${props.suffix}`
+    const formatValue = (value: number) => {
+      if (typeof props.formatter === 'function') return props.formatter(Number(value))
+      return `${Number(value).toFixed(props.step < 1 ? 2 : 0)}${props.suffix}`
+    }
 
     return () =>
       h('div', { class: 'range-row' }, [
@@ -554,21 +585,33 @@ let scene: THREE.Scene
 let camera: THREE.PerspectiveCamera
 let renderer: THREE.WebGLRenderer
 let controls: OrbitControls
+
+// 用 Three.js 里的 CanvasTexture 做天空背景：
+// 正式版：天空不要每帧重绘，但也不能完全冻结；改成低频更新，兼顾变色和手感。
+let skyBackgroundCanvas: HTMLCanvasElement | null = null
+let skyBackgroundContext: CanvasRenderingContext2D | null = null
+let skyBackgroundTexture: THREE.CanvasTexture | null = null
+// 雷达仍保留可见变化缓存；天空背景低频更新，避免持续上传 CanvasTexture。
+let lastSkyBackgroundKey = ''
+let lastAltitudeGaugeKey = ''
+const SKY_VISUAL_UPDATE_INTERVAL = 420
+let lastSkyVisualUpdateTime = -Infinity
+let forceSkyVisualUpdate = true
 let resizeObserver: ResizeObserver | null = null
 let animationId = 0
 let lastTime = 0
 let frameCount = 0
 let runtimeSolarTime = state.solarTime
-let lastSolarTimeUiSync = 0
-const SOLAR_TIME_UI_SYNC_INTERVAL = 16
-// 性能优化：太阳影子、天空、城市灯光、雷达扫描不需要每帧全部重建。
-let lastShadowUpdateTime = 0
-let lastGaugeUpdateTime = 0
-let lastSkyAndCityUpdateTime = 0
-const SHADOW_UPDATE_INTERVAL = 130
-const PLAYER_SHADOW_UPDATE_INTERVAL = 999999
-const GAUGE_UPDATE_INTERVAL = 240
-const SKY_CITY_UPDATE_INTERVAL = 16
+// 播放状态下：Three 场景 / 右侧动态数据跟 rAF；Element Plus 滑块不用 60fps 强制同步，避免播放时拖慢手感。
+const SOLAR_TIME_SLIDER_SYNC_INTERVAL = 120
+let lastSolarTimeSliderSync = 0
+// 播放状态下动态数据跟随 rAF 每帧同步。
+let syncingSolarTimeFromRuntime = false
+const MANUAL_SOLAR_TIME_HOLD_MS = 620
+let manualSolarTimeHoldUntil = 0
+// v6：除天空背景外，场景数据统一跟随 rAF。
+// 停播时也保持太阳、雷达、城市灯光、阴影与右侧动态数据同步到当前参数；天空背景冻结用于排查性能。
+let rebuildPathTimer = 0
 
 let rootGroup: THREE.Group
 let domeGroup: THREE.Group
@@ -639,26 +682,15 @@ const cityClockItems: CityClockItem[] = []
 const OBSERVER_POINT = new THREE.Vector3(-0.02, 0.08, -0.98)
 
 const dateLabel = computed(() => dayOfYearToMonthDay(state.dayOfYear))
-const solarMetrics = computed<SolarMetrics>(() => computeSolarMetrics(state.latitude, state.dayOfYear, state.solarTime))
+const runtimeSolarTimeRef = ref(state.solarTime)
+const solarMetrics = ref<SolarMetrics>(computeSolarMetrics(state.latitude, state.dayOfYear, state.solarTime))
 
 const dayPhase = computed<'night' | 'dawn' | 'day' | 'sunset'>(() => {
   const alt = solarMetrics.value.altitude
   // 太阳高度角低于约 -6° 时接近民用晨昏线以下，更适合判定为夜晚；-6°~8° 作为晨昏过渡。
   if (alt <= -6) return 'night'
-  if (alt < 8) return state.solarTime < 12 ? 'dawn' : 'sunset'
+  if (alt < 8) return runtimeSolarTimeRef.value < 12 ? 'dawn' : 'sunset'
   return 'day'
-})
-
-const pageSkyStyle = computed(() => {
-  const sky = getSmoothSkyColors(solarMetrics.value.altitude, state.solarTime)
-  return {
-    background: `
-      radial-gradient(circle at ${sky.sunX}% ${sky.sunY}%, ${sky.glowWarm}, transparent 25%),
-      radial-gradient(circle at 16% 18%, ${sky.glowCool}, transparent 30%),
-      radial-gradient(circle at 72% 86%, rgba(129, 140, 248, ${sky.nightGlowAlpha}), transparent 38%),
-      linear-gradient(180deg, ${sky.top} 0%, ${sky.mid} 48%, ${sky.bottom} 100%)
-    `,
-  }
 })
 
 const formatDayLength = computed(() => (solarMetrics.value.polarType ? solarMetrics.value.polarType : formatHour(solarMetrics.value.dayLength)))
@@ -681,7 +713,7 @@ const sceneTitle = computed(() => {
   return '太阳周日视运动 · 路径随日期变化'
 })
 
-const sceneSubtitle = computed(() => `纬度 ${formatDeg(state.latitude)} · ${dateLabel.value} · 地方太阳时 ${formatClock(state.solarTime)}`)
+const sceneSubtitle = computed(() => `纬度 ${formatDeg(state.latitude)} · ${dateLabel.value} · 地方太阳时 ${formatClock(runtimeSolarTimeRef.value)}`)
 
 function degToRad(deg: number) {
   return THREE.MathUtils.degToRad(deg)
@@ -764,6 +796,81 @@ function getSmoothSkyColors(altitude: number, solarTime: number) {
     sunX: isMorning ? 22 : 78,
     sunY: altitude > 20 ? 18 : 26,
   }
+}
+
+function initCanvasSkyBackground() {
+  skyBackgroundCanvas = document.createElement('canvas')
+  // 512 用在全屏渐变背景已经足够平滑，上传到 GPU 的成本比 1024 明显低。
+  skyBackgroundCanvas.width = 512
+  skyBackgroundCanvas.height = 512
+  skyBackgroundContext = skyBackgroundCanvas.getContext('2d')
+
+  if (!skyBackgroundContext) return
+
+  skyBackgroundTexture = new THREE.CanvasTexture(skyBackgroundCanvas)
+  skyBackgroundTexture.colorSpace = THREE.SRGBColorSpace
+  skyBackgroundTexture.minFilter = THREE.LinearFilter
+  skyBackgroundTexture.magFilter = THREE.LinearFilter
+  skyBackgroundTexture.generateMipmaps = false
+  scene.background = skyBackgroundTexture
+
+  const metrics = computeSolarMetrics(state.latitude, state.dayOfYear, runtimeSolarTime)
+  updateCanvasSkyBackground(metrics)
+}
+
+function updateCanvasSkyBackground(metrics: SolarMetrics) {
+  if (!skyBackgroundCanvas || !skyBackgroundContext || !skyBackgroundTexture) return
+
+  const skyKey = `${Math.round(metrics.altitude * 20)}-${Math.round(metrics.solarTime * 120)}`
+  if (skyKey === lastSkyBackgroundKey) return
+  lastSkyBackgroundKey = skyKey
+
+  const colors = getSmoothSkyColors(metrics.altitude, metrics.solarTime)
+  const dayK = smoothstep(-2, 30, metrics.altitude)
+  const nightK = 1 - smoothstep(-6, 6, metrics.altitude)
+  const isMorning = metrics.solarTime < 12
+  const canvas = skyBackgroundCanvas
+  const ctx = skyBackgroundContext
+  const w = canvas.width
+  const h = canvas.height
+
+  const linear = ctx.createLinearGradient(0, 0, 0, h)
+  linear.addColorStop(0, colors.top)
+  linear.addColorStop(0.5, colors.mid)
+  linear.addColorStop(1, colors.bottom)
+  ctx.fillStyle = linear
+  ctx.fillRect(0, 0, w, h)
+
+  const sunX = (isMorning ? 0.24 : 0.76) * w
+  const sunY = (metrics.altitude > 20 ? 0.18 : 0.28) * h
+  const warmOpacity = metrics.altitude > -6 ? 0.14 + 0.34 * smoothstep(-6, 35, metrics.altitude) : 0.04
+  const sunGlow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, w * 0.38)
+  sunGlow.addColorStop(0, `rgba(255, 244, 194, ${warmOpacity})`)
+  sunGlow.addColorStop(0.28, `rgba(255, 209, 102, ${warmOpacity * 0.56})`)
+  sunGlow.addColorStop(1, 'rgba(255, 209, 102, 0)')
+  ctx.fillStyle = sunGlow
+  ctx.fillRect(0, 0, w, h)
+
+  const coolGlow = ctx.createRadialGradient(w * 0.18, h * 0.16, 0, w * 0.18, h * 0.16, w * 0.34)
+  coolGlow.addColorStop(0, `rgba(77, 220, 255, ${0.08 + 0.16 * dayK})`)
+  coolGlow.addColorStop(1, 'rgba(77, 220, 255, 0)')
+  ctx.fillStyle = coolGlow
+  ctx.fillRect(0, 0, w, h)
+
+  const nightGlow = ctx.createRadialGradient(w * 0.7, h * 0.84, 0, w * 0.7, h * 0.84, w * 0.44)
+  nightGlow.addColorStop(0, `rgba(129, 140, 248, ${0.08 + 0.2 * nightK})`)
+  nightGlow.addColorStop(1, 'rgba(129, 140, 248, 0)')
+  ctx.fillStyle = nightGlow
+  ctx.fillRect(0, 0, w, h)
+
+  // 轻微暗角也画到同一张 canvas 里，避免额外 DOM 伪元素合成。
+  const vignette = ctx.createRadialGradient(w * 0.5, h * 0.45, w * 0.15, w * 0.5, h * 0.5, w * 0.72)
+  vignette.addColorStop(0, 'rgba(0, 0, 0, 0)')
+  vignette.addColorStop(1, `rgba(0, 0, 0, ${0.2 + 0.16 * nightK})`)
+  ctx.fillStyle = vignette
+  ctx.fillRect(0, 0, w, h)
+
+  skyBackgroundTexture.needsUpdate = true
 }
 
 function computeDeclination(dayOfYear: number) {
@@ -868,6 +975,14 @@ function formatClock(value: number) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
 
+function formatSolarTimeCompact(value: number) {
+  if (!Number.isFinite(value)) return '--:--'
+  const totalMinutes = Math.round((((value % 24) + 24) % 24) * 60) % 1440
+  const h = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
 function isApprox(value: number, target: number, tolerance = 0.05) {
   return Math.abs(value - target) <= tolerance
 }
@@ -876,20 +991,50 @@ function setDay(day: number) {
   state.dayOfYear = Math.round(clamp(day, 1, 365))
 }
 
-function setSafeSolarTime(time: number) {
+function setSolarTimeFromUser(time: number) {
   if (!Number.isFinite(time)) return
-  state.solarTime = clamp(time, 0, 24)
+  const safeTime = clamp(time, 0, 24)
+
+  // 播放状态下拖动滑块 / 点击日出正午日落时，先把运行时太阳时同步到用户指定值，
+  // 并短暂停住自动推进，避免下一帧又被旧的 runtimeSolarTime 写回造成“闪回”。
+  runtimeSolarTime = safeTime
+  runtimeSolarTimeRef.value = safeTime
+  solarMetrics.value = computeSolarMetrics(state.latitude, state.dayOfYear, safeTime)
+  state.solarTime = safeTime
+  const now = performance.now()
+  manualSolarTimeHoldUntil = now + MANUAL_SOLAR_TIME_HOLD_MS
+  markSolarSceneDirty()
+}
+
+function setSafeSolarTime(time: number) {
+  setSolarTimeFromUser(time)
 }
 
 function togglePlay() {
   isPlaying.value = !isPlaying.value
+  if (!isPlaying.value) {
+    // 暂停瞬间把滑块位置对齐到当前运行时太阳时，避免暂停后滑块和画面时间不一致。
+    syncingSolarTimeFromRuntime = true
+    state.solarTime = runtimeSolarTime
+    syncingSolarTimeFromRuntime = false
+    runtimeSolarTimeRef.value = runtimeSolarTime
+    solarMetrics.value = computeSolarMetrics(state.latitude, state.dayOfYear, runtimeSolarTime)
+  } else {
+    runtimeSolarTime = state.solarTime
+    runtimeSolarTimeRef.value = runtimeSolarTime
+    manualSolarTimeHoldUntil = performance.now() + 120
+  }
 }
 
 function setStandardScene() {
   state.latitude = 31.23
   state.dayOfYear = 172
   state.solarTime = 9.2
+  runtimeSolarTime = 9.2
+  runtimeSolarTimeRef.value = 9.2
+  solarMetrics.value = computeSolarMetrics(state.latitude, state.dayOfYear, runtimeSolarTime)
   state.playSpeed = 1.2
+  markSolarSceneDirty(true)
   setControlMode('god')
   setCameraView('standard')
 }
@@ -1174,6 +1319,7 @@ function destroyCurrentPlayerController() {
 }
 
 async function setPlayerModel(modelKey: PlayerModelKey) {
+  blurActiveElement()
   if (selectedPlayerModel.value === modelKey) return
 
   const wasPlayerMode = controlMode.value === 'player'
@@ -1206,7 +1352,19 @@ async function setPlayerModel(modelKey: PlayerModelKey) {
   }
 }
 
+function blurActiveElement() {
+  const active = document.activeElement as HTMLElement | null
+  active?.blur?.()
+}
+
+function focusPlayerCanvas() {
+  if (!renderer?.domElement) return
+  renderer.domElement.focus?.({ preventScroll: true })
+}
+
 async function setControlMode(mode: ControlMode) {
+  blurActiveElement()
+
   if (mode === 'god') {
     controlMode.value = 'god'
     playerViewMode.value = 'third'
@@ -1232,6 +1390,7 @@ async function setControlMode(mode: ControlMode) {
 
   applyControlMode()
   setPlayerView('third')
+  requestAnimationFrame(() => focusPlayerCanvas())
 }
 
 function forcePlayerThirdPerson() {
@@ -1326,6 +1485,8 @@ function handleThirdPersonPointerDown(e: PointerEvent) {
   const canvas = e.currentTarget as HTMLCanvasElement
   canvas.setPointerCapture?.(e.pointerId)
   canvas.style.cursor = 'grabbing'
+  blurActiveElement()
+  focusPlayerCanvas()
 
   e.preventDefault()
 }
@@ -1467,12 +1628,26 @@ function isFirstPersonJumpViewLockActive() {
 function handlePlayerKeyDown(e: KeyboardEvent) {
   if (e.code !== 'Space') return
   if (controlMode.value !== 'player') return
-  if (playerViewMode.value !== 'first') return
   if (!player || !isPlayerReady.value) return
 
-  // 不阻止默认事件，不拦截 three-player-controller 的跳跃输入；
-  // 只锁定视角，避免 Space 跳跃被误处理成视角切换。
-  firstPersonJumpViewLockUntil = performance.now() + 620
+  const active = document.activeElement as HTMLElement | null
+  const isCanvasFocused = active === renderer?.domElement
+  const isBodyFocused = !active || active === document.body || active === document.documentElement
+
+  // 关键修复：玩家模式下 Space 是跳跃键。
+  // 如果焦点还停在按钮、滑块、面板里的可聚焦元素上，Space 会触发浏览器默认 click，
+  // 从而重新执行“第三人称 / 第一人称 / 玩家模式”等按钮逻辑，表现为人物突然转身、镜头回弹、往回跳。
+  if (!isCanvasFocused && !isBodyFocused) {
+    e.preventDefault()
+    blurActiveElement()
+  }
+
+  focusPlayerCanvas()
+
+  // 不 stopPropagation：three-player-controller 仍然可以收到 Space 并执行跳跃。
+  if (playerViewMode.value === 'first') {
+    firstPersonJumpViewLockUntil = performance.now() + 620
+  }
 }
 
 function restoreFirstPersonViewAfterJump() {
@@ -1519,6 +1694,8 @@ function setPlayerInputEnabled(enabled: boolean) {
 function applyControlMode() {
   if (!renderer || !controls) return
 
+  renderer.setPixelRatio(getRendererPixelRatio())
+
   const isPlayerMode = controlMode.value === 'player' && isPlayerReady.value
 
   // 第三人称让库接管 OrbitControls；第一人称关闭 OrbitControls，防止鼠标控制打架。
@@ -1543,6 +1720,7 @@ function applyControlMode() {
 }
 
 function setPlayerView(view: PlayerViewMode) {
+  blurActiveElement()
   controlMode.value = 'player'
 
   if (!player || !isPlayerReady.value) {
@@ -1581,6 +1759,7 @@ function setPlayerView(view: PlayerViewMode) {
 
   requestAnimationFrame(() => {
     applyControlMode()
+    focusPlayerCanvas()
     if (view === 'third') {
       tunePlayerCameraForThirdPerson()
       initThirdPersonCameraAngle(true)
@@ -1621,6 +1800,7 @@ function initThree() {
 
   scene = new THREE.Scene()
   scene.fog = new THREE.Fog(0x061022, 11, 28)
+  initCanvasSkyBackground()
 
   const rect = canvasWrapRef.value.getBoundingClientRect()
   const width = Math.max(1, rect.width)
@@ -1629,18 +1809,28 @@ function initThree() {
   camera = new THREE.PerspectiveCamera(46, width / height, 0.1, 100)
   camera.position.set(7.6, 5.2, 8.6)
 
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+  renderer = new THREE.WebGLRenderer({
+    // 高性能外壳：WebGL 画布改成不透明，避免透明 canvas 叠在复杂 CSS 背景上造成合成压力。
+    antialias: true,
+    alpha: false,
+    powerPreference: 'high-performance',
+  })
   renderer.setPixelRatio(getRendererPixelRatio())
   renderer.setSize(width, height, false)
-  renderer.setClearColor(0x061022, 0)
+  renderer.setClearColor(0x061022, 1)
+  renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1.04
 
   // v38：启用 Three.js 原生阴影。太阳方向由 keyLight 绑定太阳位置来控制。
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFShadowMap
-  // 太阳视运动需要影子连续变化，这里恢复每帧更新原生阴影。
-  renderer.shadowMap.autoUpdate = true
+  // 保留原生阴影，但关闭每帧自动重算，改由 syncThreeJsSunShadow 按频率更新。
+  renderer.shadowMap.autoUpdate = false
   renderer.domElement.style.width = '100%'
   renderer.domElement.style.height = '100%'
+  renderer.domElement.style.outline = 'none'
+  renderer.domElement.tabIndex = 0
   canvasWrapRef.value.appendChild(renderer.domElement)
   bindThirdPersonMouseControls(renderer.domElement)
 
@@ -1659,7 +1849,7 @@ function initThree() {
   keyLight = new THREE.DirectionalLight(0xffe6a3, 1.75)
   keyLight.position.set(4, 8, 5)
   keyLight.castShadow = true
-  keyLight.shadow.mapSize.set(640, 640)
+  keyLight.shadow.mapSize.set(CITY_PERFORMANCE_CONFIG.shadowMapSize, CITY_PERFORMANCE_CONFIG.shadowMapSize)
   keyLight.shadow.camera.near = 0.5
   keyLight.shadow.camera.far = 26
   keyLight.shadow.camera.left = -7.2
@@ -1702,7 +1892,7 @@ function initThree() {
   createNightSkyDecorations()
   rebuildSolarPaths()
   applyLayerVisibility()
-  updateSceneBySolar()
+  commitSolarSceneUpdate(solarMetrics.value, performance.now(), true)
 
   resizeObserver = new ResizeObserver(() => requestAnimationFrame(resizeRenderer))
   resizeObserver.observe(canvasWrapRef.value)
@@ -1719,6 +1909,18 @@ function applyMeshShadowSettings(root: THREE.Object3D) {
   root.traverse(obj => {
     const mesh = obj as THREE.Mesh
     if (!mesh.isMesh) return
+
+    if (mesh.userData.performanceNoCastShadow) {
+      mesh.castShadow = false
+      mesh.receiveShadow = true
+      return
+    }
+
+    if (mesh.userData.forceCastShadow) {
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      return
+    }
 
     const material = mesh.material
     const materials = Array.isArray(material) ? material : [material]
@@ -1762,6 +1964,7 @@ function syncThreeJsSunShadow(metrics: SolarMetrics) {
   const isShadowVisible = layers.shadow && metrics.altitude > 1
   keyLight.castShadow = isShadowVisible
   renderer.shadowMap.enabled = isShadowVisible
+  renderer.shadowMap.autoUpdate = false
 
   // 太阳高度低时阴影更长；Three.js 阴影用定向光生成，方向与太阳位置绑定。
   const sunDir = solarToPosition(metrics, 1).normalize()
@@ -1773,7 +1976,10 @@ function syncThreeJsSunShadow(metrics: SolarMetrics) {
 
   const dayK = smoothstep(-2, 30, metrics.altitude)
   keyLight.intensity = isShadowVisible ? 1.35 + dayK * 2.05 : 0.14
-  // renderer.shadowMap.needsUpdate = true
+
+  if (isShadowVisible) {
+    renderer.shadowMap.needsUpdate = true
+  }
 }
 
 function createCircularBoundaryColliders() {
@@ -1950,12 +2156,12 @@ type CityBuildingOpts = {
   floors?: number
 }
 
-const buildingsInBlock = 8
+const buildingsInBlock = CITY_PERFORMANCE_CONFIG.buildingsInBlock
 
 function createCityBlocks() {
   const blockCenters = [-3.75, 0, 3.75]
   const palettes = [0x8ecae6, 0xffb703, 0xfb8500, 0xbde0fe, 0xcdb4db, 0xa7c957, 0xffafcc, 0x90dbf4, 0xfed9b7, 0x98f5e1, 0xf4a261, 0xa5b4fc]
-  const modernTowerBlocks = new Set([4, 5, 7])
+  const modernTowerBlocks = new Set(CITY_PERFORMANCE_CONFIG.modernTowerBlockIndexes)
   let blockIndex = 0
 
   for (const z of blockCenters) {
@@ -2217,8 +2423,10 @@ function createPocketPark(x: number, z: number, radius = 0.34) {
   park.rotation.x = -Math.PI / 2
   park.position.set(x, 0.096, z)
   schoolGroup.add(park)
-  createTree(x - radius * 0.35, z, 0.28)
-  createTree(x + radius * 0.28, z + radius * 0.16, 0.24)
+  if (CITY_PERFORMANCE_CONFIG.enableParkTrees) {
+    createTree(x - radius * 0.35, z, 0.28)
+    createTree(x + radius * 0.28, z + radius * 0.16, 0.24)
+  }
 }
 
 function createSmallPlaza(x: number, z: number) {
@@ -2239,7 +2447,7 @@ function createRoadsideTreeBelts() {
   const positions: Array<[number, number]> = []
 
   for (const roadOffset of roadOffsets) {
-    for (let t = -5.25; t <= 5.25; t += 1.25) {
+    for (let t = -5.25; t <= 5.25; t += CITY_PERFORMANCE_CONFIG.roadsideTreeStep) {
       if (roadOffsets.some(offset => Math.abs(t - offset) < 0.42)) continue
       positions.push([roadOffset - treeOffset, t], [roadOffset + treeOffset, t])
       positions.push([t, roadOffset - treeOffset], [t, roadOffset + treeOffset])
@@ -2258,7 +2466,7 @@ function createCityTimeElements() {
   const lampOffset = 0.52
 
   for (const roadOffset of roadOffsets) {
-    for (let t = -5.25; t <= 5.25; t += 1.38) {
+    for (let t = -5.25; t <= 5.25; t += CITY_PERFORMANCE_CONFIG.streetLampStep) {
       if (roadOffsets.some(offset => Math.abs(t - offset) < 0.4)) continue
       createStreetLamp(roadOffset - lampOffset, t, 0)
       createStreetLamp(roadOffset + lampOffset, t, Math.PI)
@@ -2497,6 +2705,7 @@ function createTree(x: number, z: number, scale = 0.46) {
     new THREE.MeshStandardMaterial({ color: 0x7a4a2a, roughness: 0.86 }),
   )
   trunk.position.y = trunkHeight / 2
+  trunk.userData.forceCastShadow = CITY_PERFORMANCE_CONFIG.treeCastShadow
   tree.add(trunk)
 
   // 树枝：斜向伸出，不再是“一根棍子”。
@@ -2507,6 +2716,7 @@ function createTree(x: number, z: number, scale = 0.46) {
     branch.position.set(Math.sin(angle) * scale * 0.12, trunkHeight * (0.66 + (i % 2) * 0.08), Math.cos(angle) * scale * 0.12)
     branch.rotation.z = Math.sin(angle) * 0.48
     branch.rotation.x = Math.cos(angle) * 0.48
+    branch.userData.forceCastShadow = CITY_PERFORMANCE_CONFIG.treeCastShadow
     tree.add(branch)
   })
 
@@ -2524,6 +2734,7 @@ function createTree(x: number, z: number, scale = 0.46) {
     const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(c.r, 1), leafMaterial(c.color!))
     crown.position.set(c.x, c.y, c.z)
     crown.rotation.set(i * 0.25, i * 0.45, i * 0.18)
+    crown.userData.forceCastShadow = CITY_PERFORMANCE_CONFIG.treeCastShadow
     tree.add(crown)
   })
 
@@ -2534,10 +2745,29 @@ function createTree(x: number, z: number, scale = 0.46) {
   )
   base.rotation.x = -Math.PI / 2
   base.position.y = 0.006
+  base.userData.forceCastShadow = CITY_PERFORMANCE_CONFIG.treeCastShadow
   tree.add(base)
 
+  tree.traverse(obj => {
+    const mesh = obj as THREE.Mesh
+    if (!mesh.isMesh) return
+
+    // 用户要求树木所有部件都参与原生投影：树干、树枝、树冠、树下底盘全部 castShadow。
+    mesh.castShadow = CITY_PERFORMANCE_CONFIG.treeCastShadow
+    mesh.receiveShadow = true
+  })
+
   schoolGroup.add(tree)
-  addShadowCaster(x, z, scale * 0.62, scale * 0.62, trunkHeight + scale * 0.42)
+
+  // 树木需要能挡住玩家，但不要把每个树枝/树冠都做成 collider。
+  // 用一个简化盒状碰撞体包住树干和主要树冠，手感稳定，性能压力也小。
+  if (CITY_PERFORMANCE_CONFIG.enableTreeColliders) {
+    const colliderSize = Math.max(0.18, scale * CITY_PERFORMANCE_CONFIG.treeColliderWidthRatio)
+    const colliderHeight = Math.max(0.42, scale * CITY_PERFORMANCE_CONFIG.treeColliderHeightRatio)
+    addColliderBox(x, GROUND_SURFACE_Y + colliderHeight / 2, z, colliderSize, colliderHeight, colliderSize)
+  }
+
+  // 树木会参与原生投影：树干、树枝、树冠、树下底盘全部 castShadow。
 }
 
 function addShadowCaster(x: number, z: number, width: number, depth: number, height: number, target?: THREE.Object3D) {
@@ -2761,7 +2991,7 @@ function buildSunPathPoints(latitude: number, dayOfYear: number) {
 
   const start = m.polarType === '极昼' ? 0 : m.sunrise
   const end = m.polarType === '极昼' ? 24 : m.sunset
-  const steps = 180
+  const steps = controlMode.value === 'player' ? CITY_PERFORMANCE_CONFIG.pathStepsPlayer : CITY_PERFORMANCE_CONFIG.pathStepsGod
 
   for (let i = 0; i <= steps; i++) {
     const t = start + ((end - start) * i) / steps
@@ -2780,12 +3010,11 @@ function createSmallMarker(position: THREE.Vector3, color: number, text: string)
   return group
 }
 
-function updateSceneBySolar(metrics: SolarMetrics = solarMetrics.value) {
+function updateSceneBySolar(metrics: SolarMetrics = solarMetrics.value, now = performance.now()) {
   if (!sunMesh || !sunGlow || !lightRay) return
 
   const sunPos = solarToPosition(metrics, SKY_RADIUS)
   const isAbove = metrics.altitude > 0
-  const now = performance.now()
 
   sunMesh.position.copy(sunPos)
   sunGlow.position.copy(sunPos)
@@ -2802,19 +3031,9 @@ function updateSceneBySolar(metrics: SolarMetrics = solarMetrics.value) {
   // v43：阴影由 Three.js 原生 shadowMap 每帧生成，旧手绘阴影不再更新。
   if (shadowGroup?.visible) shadowGroup.visible = false
 
-  // 太阳高度角雷达扫描原来每帧 clearGroup + 重建几何和文字，比较费。
-  // 这里单独限频，保留扫描感，同时避免大量 dispose / new。
-  const gaugeInterval = controlMode.value === 'player' ? GAUGE_UPDATE_INTERVAL * 1.8 : GAUGE_UPDATE_INTERVAL
-  if (now - lastGaugeUpdateTime >= gaugeInterval) {
-    lastGaugeUpdateTime = now
-    updateAltitudeAngleGauge(metrics)
-  }
-
-  // 天空颜色、城市灯光、时钟牌无需逐帧更新，限频即可。
-  if (now - lastSkyAndCityUpdateTime >= SKY_CITY_UPDATE_INTERVAL) {
-    lastSkyAndCityUpdateTime = now
-    updateSkyByTime(metrics)
-  }
+  // 雷达扫描、城市灯光、时钟牌继续跟随 rAF；天空背景只做低频变色，不再逐帧上传 CanvasTexture。
+  updateAltitudeAngleGauge(metrics)
+  updateSkyByTime(metrics, now)
 }
 
 function updateAllShadows(_metrics: SolarMetrics) {
@@ -2834,6 +3053,15 @@ function updateLightRay(sunPos: THREE.Vector3, visible: boolean) {
 
 function updateAltitudeAngleGauge(metrics: SolarMetrics) {
   if (!altitudeAngleGroup) return
+
+  const gaugeKey =
+    !layers.altitudeGauge || metrics.altitude <= 0
+      ? 'hidden'
+      : `${Math.round(metrics.altitude * 20)}-${Math.round(metrics.azimuth * 20)}-${Math.round(metrics.solarTime * 120)}`
+
+  if (gaugeKey === lastAltitudeGaugeKey) return
+  lastAltitudeGaugeKey = gaugeKey
+
   clearGroup(altitudeAngleGroup)
   if (!layers.altitudeGauge || metrics.altitude <= 0) return
 
@@ -2844,7 +3072,7 @@ function updateAltitudeAngleGauge(metrics: SolarMetrics) {
    * - 黄色长光线从城市街道观测点一直连到太阳；
    * - 雷达扫描盘悬浮在这条光线上；
    * - 灰色基准线表示与地面平行的地平线方向；
-   * - 扫描扇面从地平基准线扫到太阳光线，表达高度角 h。
+   * - 稳定扇面从地平基准线展开到太阳光线，表达高度角 h。
    */
   const rayTarget = OBSERVER_POINT.clone()
   const sunPos = solarToPosition(metrics, SKY_RADIUS)
@@ -2870,11 +3098,12 @@ function updateAltitudeAngleGauge(metrics: SolarMetrics) {
   altitudeAngleGroup.add(makeLine([rayTarget, sunPos], 0xfff4bd, 0.42))
 
   const horizonEnd = origin.clone().add(horizontal.clone().multiplyScalar(r * 1.35))
-  const horizonBack = origin.clone().add(horizontal.clone().multiplyScalar(-r * 0.28))
   const sunEdge = origin.clone().add(sunDir.clone().multiplyScalar(r * 1.1))
 
   // 同一高度处的地平基准线：表示“与地面平行的方向”，不贴在地面上。
-  altitudeAngleGroup.add(makeTubeLine([horizonBack, horizonEnd], 0xe5e7eb, 0.01, 0.58))
+  // 注意：基准线从太阳光线交点 origin 开始，不再向另一侧多伸出一小截，
+  // 避免出现“地平线和太阳光线交点处冒出去”的视觉问题。
+  altitudeAngleGroup.add(makeTubeLine([origin, horizonEnd], 0xe5e7eb, 0.01, 0.58))
 
   // 加粗扫描盘附近的太阳光线边，和完整太阳光线重合。
   altitudeAngleGroup.add(makeTubeLine([origin, sunEdge], 0xffd166, 0.022, 1))
@@ -2925,15 +3154,9 @@ function updateAltitudeAngleGauge(metrics: SolarMetrics) {
   )
   altitudeAngleGroup.add(fan)
 
-  // 动态扫描线：像雷达一样在“地平基准线—太阳光线”之间往返。
-  const sweepPhase = (Math.sin(performance.now() * 0.0028) + 1) / 2
-  const sweepAlt = shownAltitude * sweepPhase
-  const sweepA = degToRad(sweepAlt)
-  const sweepEnd = origin
-    .clone()
-    .add(horizontal.clone().multiplyScalar(Math.cos(sweepA) * r * 0.95))
-    .add(up.clone().multiplyScalar(Math.sin(sweepA) * r * 0.95))
-  altitudeAngleGroup.add(makeTubeLine([origin, sweepEnd], 0xffffff, 0.011, 0.82))
+  // 不再绘制动态扫描线。
+  // 原来的白色扫描线会在画面里持续扫动，录屏时容易抢视线；
+  // 现在只保留高度角弧线和半透明扇面，表达更加稳定。
 
   for (let alt = 15; alt <= 75; alt += 15) {
     if (alt > shownAltitude + 0.5) break
@@ -3060,26 +3283,36 @@ function drawCityClockTexture(ctx: CanvasRenderingContext2D, texture: THREE.Canv
   texture.needsUpdate = true
 }
 
-function updateSkyByTime(metrics: SolarMetrics) {
+function updateSkyByTime(metrics: SolarMetrics, now = performance.now()) {
   if (!renderer || !scene) return
-  const colors = getSmoothSkyColors(metrics.altitude, state.solarTime)
 
-  renderer.setClearColor(colors.clear, 0)
-  if (scene.fog instanceof THREE.Fog) {
-    scene.fog.color.set(colors.fog)
-    scene.fog.near = metrics.altitude <= -4 ? 10 : 12.5
-    scene.fog.far = metrics.altitude <= -4 ? 28 : 32
-  }
-  if (hemisphereDome?.material) {
-    const material = hemisphereDome.material as THREE.MeshBasicMaterial
-    material.color.set(colors.dome)
-    material.opacity = metrics.altitude > 20 ? 0.08 : metrics.altitude <= -4 ? 0.045 : 0.065
+  // 天空不能完全冻结，否则播放时看不到早晚/昼夜变化；
+  // 但 CanvasTexture 上传又不适合每帧做，所以这里改成低频更新。
+  const shouldUpdateSkyVisual = forceSkyVisualUpdate || now - lastSkyVisualUpdateTime >= SKY_VISUAL_UPDATE_INTERVAL
+  if (shouldUpdateSkyVisual) {
+    lastSkyVisualUpdateTime = now
+    forceSkyVisualUpdate = false
+
+    const colors = getSmoothSkyColors(metrics.altitude, metrics.solarTime)
+    updateCanvasSkyBackground(metrics)
+    renderer.setClearColor(colors.clear, 1)
+
+    if (scene.fog instanceof THREE.Fog) {
+      scene.fog.color.set(colors.fog)
+      scene.fog.near = metrics.altitude <= -4 ? 10 : 12.5
+      scene.fog.far = metrics.altitude <= -4 ? 28 : 32
+    }
+
+    if (hemisphereDome?.material) {
+      const material = hemisphereDome.material as THREE.MeshBasicMaterial
+      material.color.set(colors.dome)
+      material.opacity = metrics.altitude > 20 ? 0.08 : metrics.altitude <= -4 ? 0.045 : 0.065
+    }
   }
 
-  // 白天更亮：同时调 Three 场景灯光，不只换外层容器背景。
+  // 灯光、星空、城市灯光仍跟 rAF，保证太阳播放时画面反馈连续。
   const dayK = smoothstep(-2, 30, metrics.altitude)
   const nightK = 1 - smoothstep(-6, 6, metrics.altitude)
-  // 原生阴影想更明显，不能只加太阳光，还要适当降低环境光和边缘补光。
   if (ambientLight) ambientLight.intensity = 0.42 + dayK * 0.62
   if (rimLight) rimLight.intensity = 0.22 + dayK * 0.36
 
@@ -3191,14 +3424,18 @@ function applyLayerVisibility() {
     const isShadowVisible = layers.shadow && metrics.altitude > 1
     keyLight.castShadow = isShadowVisible
     renderer.shadowMap.enabled = isShadowVisible
-    // renderer.shadowMap.needsUpdate = true
+    if (isShadowVisible) {
+      renderer.shadowMap.needsUpdate = true
+    }
   }
 }
 
 function getRendererPixelRatio() {
-  // 玩家版优先保证操控流畅。高分屏下 DPR 过高会让白天楼群、阴影、路径线渲染发卡。
-  // 这里限制到 1.5，优先保证“玩起来顺”。
-  return Math.min(window.devicePixelRatio || 1, 1.35)
+  // 高性能外壳：不在鼠标拖动开始/结束时反复切 DPR。
+  // 反复 setPixelRatio 会触发 WebGL 画布重分配，手感上也会像“顿一下”。
+  const dpr = window.devicePixelRatio || 1
+  if (controlMode.value === 'player') return Math.min(dpr, CITY_PERFORMANCE_CONFIG.playerDpr)
+  return Math.min(dpr, 1.2)
 }
 
 function resizeRenderer() {
@@ -3217,6 +3454,21 @@ function resizeRenderer() {
   renderer.domElement.style.height = '100%'
 }
 
+function markSolarSceneDirty(_forceHeavy = false) {
+  // rAF 仍统一同步场景；这里用于参数/图层变化时强制刷新缓存型视觉层。
+  // 天空是低频更新，但用户拖动日期/纬度/时间后要立即刷新一次。
+  lastAltitudeGaugeKey = ''
+  lastSkyBackgroundKey = ''
+  forceSkyVisualUpdate = true
+}
+
+function commitSolarSceneUpdate(
+  metrics: SolarMetrics = computeSolarMetrics(state.latitude, state.dayOfYear, runtimeSolarTime),
+  now = performance.now(),
+) {
+  updateSceneBySolar(metrics, now)
+}
+
 function animate(now: number) {
   animationId = requestAnimationFrame(animate)
   frameCount += 1
@@ -3225,26 +3477,39 @@ function animate(now: number) {
   lastTime = now
 
   if (isPlaying.value) {
-    runtimeSolarTime += dt * state.playSpeed * 0.45
-    if (runtimeSolarTime > 24) runtimeSolarTime -= 24
-
-    // 太阳位置和光照计算仍然走 requestAnimationFrame；
-    // 但是右侧数据、顶部背景 CSS、文字等 Vue DOM 不必每帧刷新，否则白天渐变背景和数据面板会拖慢操作。
-    if (now - lastSolarTimeUiSync >= SOLAR_TIME_UI_SYNC_INTERVAL) {
-      lastSolarTimeUiSync = now
-      state.solarTime = runtimeSolarTime
+    // 用户正在拖动地方太阳时滑块 / 刚点击日出正午日落时，暂时不要自动推进。
+    // 否则下一帧会把滑块写回旧的播放时间，看起来像“闪回”。
+    if (now < manualSolarTimeHoldUntil) {
+      runtimeSolarTime = state.solarTime
+    } else {
+      runtimeSolarTime += dt * state.playSpeed * 0.45
+      if (runtimeSolarTime > 24) runtimeSolarTime -= 24
     }
-  } else {
-    runtimeSolarTime = state.solarTime
-  }
 
-  const runtimeMetrics = computeSolarMetrics(state.latitude, state.dayOfYear, runtimeSolarTime)
+    // 右侧动态数据、Three 场景使用 runtimeSolarTimeRef / solarMetrics，跟 rAF。
+    // 但 Element Plus Slider 不适合 60fps v-model 强制同步，否则播放时会比暂停明显不丝滑。
+    runtimeSolarTimeRef.value = runtimeSolarTime
+
+    if (now - lastSolarTimeSliderSync >= SOLAR_TIME_SLIDER_SYNC_INTERVAL || now < manualSolarTimeHoldUntil) {
+      lastSolarTimeSliderSync = now
+      if (Math.abs(state.solarTime - runtimeSolarTime) > 0.0001) {
+        syncingSolarTimeFromRuntime = true
+        state.solarTime = runtimeSolarTime
+        syncingSolarTimeFromRuntime = false
+      }
+    }
+  } else if (Math.abs(runtimeSolarTime - state.solarTime) > 0.0001) {
+    runtimeSolarTime = state.solarTime
+    runtimeSolarTimeRef.value = runtimeSolarTime
+    markSolarSceneDirty()
+  } else if (Math.abs(runtimeSolarTimeRef.value - runtimeSolarTime) > 0.0001) {
+    runtimeSolarTimeRef.value = runtimeSolarTime
+  }
 
   if (controlMode.value === 'player' && isPlayerReady.value) {
     applyOrbitControlForMode()
     player?.update?.(dt)
     restoreFirstPersonViewAfterJump()
-    // 边界现在交给透明圆柱碰撞体处理，不再每帧 reset，避免玩家被重置到动不了。
 
     // 飞行动画不用每帧重复触发，隔帧同步即可，减少动画切换/混合开销。
     if (frameCount % 2 === 0) syncPlayerFlightAnimation()
@@ -3254,32 +3519,64 @@ function animate(now: number) {
     controls?.update()
   }
 
-  updateSceneBySolar(runtimeMetrics)
+  // 视觉更新跟随 rAF；天空背景只做低频更新，不再逐帧重绘 CanvasTexture。
+  // 太阳、光线、阴影、雷达、城市灯光、时钟牌都在当前帧统一更新。
+  const runtimeMetrics = computeSolarMetrics(state.latitude, state.dayOfYear, runtimeSolarTime)
+  solarMetrics.value = runtimeMetrics
+  commitSolarSceneUpdate(runtimeMetrics, now)
+
   renderer?.render(scene, camera)
+}
+
+function scheduleRebuildSolarPaths() {
+  window.clearTimeout(rebuildPathTimer)
+  rebuildPathTimer = window.setTimeout(() => {
+    if (pathGroup) rebuildSolarPaths()
+    markSolarSceneDirty(true)
+  }, 100)
 }
 
 watch(
   () => [state.latitude, state.dayOfYear],
   () => {
-    if (pathGroup) rebuildSolarPaths()
-    updateSceneBySolar()
+    markSolarSceneDirty(true)
+    scheduleRebuildSolarPaths()
   },
 )
 
 watch(
-  () => [layers.dome, layers.paths, layers.shadow, layers.rays, layers.altitudeGauge, layers.cityTime],
+  () => layers.paths,
   () => {
     if (pathGroup) rebuildSolarPaths()
     applyLayerVisibility()
-    updateSceneBySolar()
+    markSolarSceneDirty(true)
+  },
+)
+
+watch(
+  () => [layers.dome, layers.shadow, layers.rays, layers.altitudeGauge, layers.cityTime],
+  () => {
+    applyLayerVisibility()
+    markSolarSceneDirty(true)
   },
 )
 
 watch(
   () => state.solarTime,
   value => {
-    if (!isPlaying.value) runtimeSolarTime = value
+    if (!Number.isFinite(value)) return
+
+    // 播放时 rAF 会每帧把 runtimeSolarTime 同步到 state.solarTime，
+    // 这只是为了刷新右侧动态数据，不应该反过来触发太阳系统重更新。
+    if (syncingSolarTimeFromRuntime) return
+
+    // 用户拖动滑块 / 点击日出正午日落 / 暂停状态下改时间时，才同步 runtime 并标记场景更新。
+    if (Math.abs(runtimeSolarTime - value) > 0.0001) {
+      runtimeSolarTime = value
+    }
+    markSolarSceneDirty()
   },
+  { flush: 'sync' },
 )
 
 onMounted(async () => {
@@ -3289,6 +3586,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(animationId)
+  window.clearTimeout(rebuildPathTimer)
   resizeObserver?.disconnect()
   window.removeEventListener('resize', resizeRenderer)
   window.removeEventListener('keydown', handlePlayerKeyDown, true)
@@ -3299,6 +3597,10 @@ onBeforeUnmount(() => {
     if (url.startsWith('blob:')) URL.revokeObjectURL(url)
   })
   controls?.dispose()
+  skyBackgroundTexture?.dispose()
+  skyBackgroundTexture = null
+  skyBackgroundCanvas = null
+  skyBackgroundContext = null
   if (renderer) {
     renderer.dispose()
     renderer.domElement.remove()
@@ -3624,22 +3926,25 @@ button.ghost {
   margin-top: 0;
 }
 .range-slider :deep(.el-slider) {
-  --el-slider-main-bg-color: #4da3ff;
-  --el-slider-runway-bg-color: rgba(226, 232, 240, 0.88);
+  --el-slider-main-bg-color: transparent;
+  --el-slider-runway-bg-color: transparent;
   --el-slider-stop-bg-color: transparent;
   width: 100%;
 }
 .range-slider :deep(.el-slider__runway) {
-  height: 6px;
+  height: 7px;
   margin: 11px 0 5px;
   border-radius: 999px;
-  background: rgba(226, 232, 240, 0.86);
+  background: linear-gradient(90deg, #172554 0%, #fb923c 20%, #facc15 50%, #fb7185 76%, #312e81 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    0 0 12px rgba(251, 146, 60, 0.16);
 }
 .range-slider :deep(.el-slider__bar) {
-  height: 6px;
+  height: 7px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #38bdf8, #60a5fa, #ffd166);
-  box-shadow: 0 0 12px rgba(96, 165, 250, 0.35);
+  background: linear-gradient(90deg, #fb923c 0%, #facc15 48%, #fb7185 78%, #8b5cf6 100%);
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.36);
 }
 .range-slider :deep(.el-slider__button-wrapper) {
   top: -15px;
@@ -3647,12 +3952,54 @@ button.ghost {
   height: 30px;
 }
 .range-slider :deep(.el-slider__button) {
-  width: 14px;
-  height: 14px;
-  border: 2px solid #f8fbff;
-  background: linear-gradient(135deg, #38bdf8, #3b82f6);
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.55);
+  width: 15px;
+  height: 15px;
+  border: 2px solid #fff7ed;
+  background: linear-gradient(135deg, #fb923c, #facc15 52%, #fb7185);
+  box-shadow: 0 0 12px rgba(251, 146, 60, 0.55);
 }
+
+/* Element Plus 的 slider 主色有时会被全局主题变量盖回蓝色，
+   所以这里用全局选择器 + !important 强压，保证打包后也能看到早中晚渐变。 */
+:global(.solar-motion-page .range-slider.el-slider) {
+  --el-slider-main-bg-color: transparent !important;
+  --el-slider-runway-bg-color: transparent !important;
+  --el-slider-stop-bg-color: transparent !important;
+  --el-color-primary: #ffd166 !important;
+}
+:global(.solar-motion-page .range-slider.el-slider .el-slider__runway) {
+  height: 7px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, #101a44 0%, #2563eb 10%, #fb923c 28%, #facc15 50%, #fb7185 72%, #6d28d9 90%, #111827 100%) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.24),
+    0 0 12px rgba(250, 204, 21, 0.2) !important;
+}
+:global(.solar-motion-page .range-slider.el-slider .el-slider__bar) {
+  height: 7px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(
+    90deg,
+    rgba(59, 130, 246, 0.36),
+    rgba(251, 146, 60, 0.42),
+    rgba(250, 204, 21, 0.48),
+    rgba(251, 113, 133, 0.42)
+  ) !important;
+  box-shadow: 0 0 12px rgba(255, 209, 102, 0.28) !important;
+}
+:global(.solar-motion-page .range-slider.el-slider .el-slider__button-wrapper) {
+  top: -15px !important;
+}
+:global(.solar-motion-page .range-slider.el-slider .el-slider__button) {
+  width: 15px !important;
+  height: 15px !important;
+  border: 2px solid #fff7ed !important;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #ffd166 38%, #fb923c 72%, #6d28d9 100%) !important;
+  box-shadow:
+    0 0 0 3px rgba(255, 209, 102, 0.12),
+    0 0 14px rgba(251, 146, 60, 0.68) !important;
+}
+
 .grid-2 {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -4117,5 +4464,327 @@ button.ghost {
   color: rgba(226, 232, 240, 0.72);
   background: rgba(15, 23, 42, 0.65);
   border-color: rgba(148, 163, 184, 0.2);
+}
+
+.stage-card,
+.canvas-wrap,
+.canvas-wrap :deep(canvas) {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.canvas-wrap {
+  contain: layout paint size;
+}
+
+.canvas-wrap :deep(canvas) {
+  will-change: transform;
+}
+
+/* =========================
+   高性能教学外壳覆盖层
+   目标：保留完整教学 UI，但去掉造成拖拽不丝滑的 CSS 合成压力。
+   关键点：不透明 WebGL canvas + 静态页面背景 + 无毛玻璃 + 轻阴影。
+   ========================= */
+.solar-motion-page,
+.solar-motion-page.phase-day,
+.solar-motion-page.phase-dawn,
+.solar-motion-page.phase-sunset,
+.solar-motion-page.phase-night {
+  --panel: rgba(7, 17, 31, 0.96);
+  --panel2: rgba(8, 20, 38, 0.98);
+  --line: rgba(125, 211, 252, 0.18);
+  background: #061022 !important;
+  transition: none !important;
+  isolation: isolate;
+}
+
+.bg-grid,
+.scan-line {
+  display: none !important;
+  animation: none !important;
+}
+
+.stage-card,
+.solar-motion-page.phase-day .stage-card,
+.solar-motion-page.phase-night .stage-card {
+  background: #061022 !important;
+  box-shadow: none !important;
+  border-color: rgba(125, 211, 252, 0.16) !important;
+  overflow: hidden;
+  contain: layout paint style;
+}
+
+.canvas-wrap {
+  background: #061022;
+  contain: strict;
+}
+
+.canvas-wrap :deep(canvas) {
+  display: block;
+  background: #061022;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.topbar,
+.panel,
+.data-card,
+.knowledge-card,
+.summary-card,
+.legend-panel,
+.scene-title {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
+  box-shadow: none !important;
+}
+
+.topbar {
+  background: rgba(7, 17, 31, 0.98) !important;
+  border-color: rgba(125, 211, 252, 0.16) !important;
+  contain: layout paint style;
+}
+
+.panel {
+  background: rgba(7, 17, 31, 0.98) !important;
+  border-color: rgba(125, 211, 252, 0.16) !important;
+  contain: layout paint style;
+}
+
+.data-card,
+.knowledge-card,
+.summary-card {
+  background: rgba(8, 20, 38, 0.98) !important;
+  border-color: rgba(125, 211, 252, 0.14) !important;
+}
+
+.sun-logo {
+  box-shadow: none !important;
+}
+
+button,
+.check-row,
+.range-row,
+.small-grid > div,
+table,
+th,
+td {
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* =========================
+   v3：Canvas 全屏底图 + UI 浮层
+   - WebGL canvas 固定铺满整个页面
+   - 顶部栏、左右面板只是浮在 canvas 上
+   - 天空背景已经移到 Three.js CanvasTexture 里；天空不再进入 rAF 逐帧更新
+   ========================= */
+.solar-motion-page,
+.solar-motion-page.phase-day,
+.solar-motion-page.phase-dawn,
+.solar-motion-page.phase-sunset,
+.solar-motion-page.phase-night {
+  position: relative !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  overflow: hidden !important;
+  background: #061022 !important;
+  isolation: isolate;
+}
+
+.stage-card,
+.solar-motion-page.phase-day .stage-card,
+.solar-motion-page.phase-night .stage-card {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #061022 !important;
+  box-shadow: none !important;
+  pointer-events: auto;
+  contain: strict;
+}
+
+.stage-card::before,
+.stage-card::after {
+  display: none !important;
+}
+
+.canvas-wrap {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 0 !important;
+  background: #061022 !important;
+  pointer-events: auto;
+  contain: strict;
+}
+
+.canvas-wrap :deep(canvas) {
+  width: 100vw !important;
+  height: 100vh !important;
+  display: block !important;
+  background: #061022 !important;
+}
+
+.topbar {
+  position: fixed !important;
+  top: 12px !important;
+  left: 12px !important;
+  right: 12px !important;
+  z-index: 8 !important;
+  height: 62px !important;
+  pointer-events: auto;
+}
+
+.layout {
+  position: fixed !important;
+  inset: 88px 12px 12px 12px !important;
+  z-index: 6 !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: 252px minmax(0, 1fr) 292px !important;
+  gap: 12px !important;
+  pointer-events: none;
+}
+
+.left-panel {
+  grid-column: 1 !important;
+  pointer-events: auto;
+  max-height: calc(100vh - 100px);
+}
+
+.right-panel {
+  grid-column: 3 !important;
+  pointer-events: auto;
+  max-height: calc(100vh - 100px);
+}
+
+.scene-title {
+  position: fixed !important;
+  top: 92px !important;
+  left: 50% !important;
+  z-index: 5 !important;
+  pointer-events: none;
+}
+
+.panel,
+.topbar {
+  background: rgba(7, 17, 31, 0.86) !important;
+  border: 1px solid rgba(125, 211, 252, 0.16) !important;
+}
+
+.data-card,
+.knowledge-card,
+.summary-card,
+.block {
+  background: rgba(8, 20, 38, 0.84) !important;
+}
+
+@media (max-width: 1120px) {
+  .layout {
+    grid-template-columns: 238px minmax(0, 1fr) 270px !important;
+  }
+}
+
+@media (max-width: 920px) {
+  .layout {
+    inset: 82px 10px 10px 10px !important;
+    grid-template-columns: 220px minmax(0, 1fr) !important;
+  }
+
+  .right-panel {
+    display: none !important;
+  }
+}
+
+/* =========================
+   v4：修复 Canvas 全屏后左侧/右侧面板被 WebGL 层盖住
+   原因：stage-card 改成 fixed 后仍在 layout 内部，fixed + z-index 会压到普通 grid 子项。
+   处理：明确让面板成为更高层级的浮层，canvas 保持底图层。
+   ========================= */
+.layout {
+  z-index: 20 !important;
+  pointer-events: none !important;
+}
+
+.stage-card,
+.canvas-wrap,
+.canvas-wrap :deep(canvas) {
+  z-index: 0 !important;
+}
+
+.left-panel,
+.right-panel,
+.panel.left-panel,
+.panel.right-panel {
+  position: relative !important;
+  z-index: 30 !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.topbar {
+  z-index: 40 !important;
+}
+
+.scene-title {
+  z-index: 25 !important;
+}
+
+/* RangeRow 是 render function 组件，部分 scoped 选择器在 Element Plus 内部节点上可能压不进去；
+   这里补一组真正全局的强选择器，确保滑块轨道不是默认蓝色。 */
+:global(.range-slider.el-slider),
+:global(.el-slider.range-slider) {
+  --el-slider-main-bg-color: transparent !important;
+  --el-slider-runway-bg-color: transparent !important;
+  --el-slider-stop-bg-color: transparent !important;
+  --el-color-primary: #ffd166 !important;
+}
+
+:global(.range-slider.el-slider .el-slider__runway),
+:global(.el-slider.range-slider .el-slider__runway),
+:global(.range-slider .el-slider__runway) {
+  height: 7px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, #0f172a 0%, #1d4ed8 12%, #fb923c 30%, #facc15 50%, #fb7185 72%, #7c3aed 88%, #111827 100%) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.26),
+    0 0 12px rgba(250, 204, 21, 0.22) !important;
+}
+
+:global(.range-slider.el-slider .el-slider__bar),
+:global(.el-slider.range-slider .el-slider__bar),
+:global(.range-slider .el-slider__bar) {
+  height: 7px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, #2563eb 0%, #fb923c 28%, #facc15 54%, #fb7185 78%, #8b5cf6 100%) !important;
+  box-shadow: 0 0 12px rgba(255, 209, 102, 0.36) !important;
+}
+
+:global(.range-slider.el-slider .el-slider__button),
+:global(.el-slider.range-slider .el-slider__button),
+:global(.range-slider .el-slider__button) {
+  width: 15px !important;
+  height: 15px !important;
+  border: 2px solid #fff7ed !important;
+  background: radial-gradient(circle at 35% 30%, #ffffff 0%, #ffd166 38%, #fb923c 70%, #7c3aed 100%) !important;
+  box-shadow:
+    0 0 0 3px rgba(255, 209, 102, 0.12),
+    0 0 14px rgba(251, 146, 60, 0.68) !important;
 }
 </style>
