@@ -1892,7 +1892,7 @@ function initThree() {
   createNightSkyDecorations()
   rebuildSolarPaths()
   applyLayerVisibility()
-  commitSolarSceneUpdate(solarMetrics.value, performance.now(), true)
+  commitSolarSceneUpdate(solarMetrics.value, performance.now())
 
   resizeObserver = new ResizeObserver(() => requestAnimationFrame(resizeRenderer))
   resizeObserver.observe(canvasWrapRef.value)
@@ -3547,7 +3547,6 @@ watch(
 watch(
   () => layers.paths,
   () => {
-    if (pathGroup) rebuildSolarPaths()
     applyLayerVisibility()
     markSolarSceneDirty(true)
   },
