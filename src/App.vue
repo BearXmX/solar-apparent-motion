@@ -26,7 +26,8 @@
 
         <div class="block">
           <h3>① 观测地点</h3>
-          <RangeRow label="纬度" :value="state.latitude" suffix="°" :min="-90" :max="90" :step="0.1" @update:value="state.latitude = $event" />
+          <RangeRow label="纬度" :value="state.latitude" suffix="°" :min="-90" :max="90" :step="0.1"
+            @update:value="state.latitude = $event" />
           <div class="grid-2">
             <button :class="{ active: isApprox(state.latitude, 0) }" @click="state.latitude = 0">赤道</button>
             <button :class="{ active: isApprox(state.latitude, 23.44) }" @click="state.latitude = 23.44">北回归线</button>
@@ -44,37 +45,28 @@
             <button :class="{ active: state.dayOfYear === 266 }" @click="setDay(266)">秋分</button>
             <button :class="{ active: state.dayOfYear === 355 }" @click="setDay(355)">冬至</button>
           </div>
-          <RangeRow label="日期" :value="state.dayOfYear" :suffix="` / ${dateLabel}`" :min="1" :max="365" :step="1" @update:value="setDay($event)" />
+          <RangeRow label="日期" :value="state.dayOfYear" :suffix="` / ${dateLabel}`" :min="1" :max="365" :step="1"
+            @update:value="setDay($event)" />
           <p class="tip">日期决定太阳赤纬 δ。6月太阳直射北回归线，北半球路径高、昼长较长；12月太阳直射南回归线，南半球路径高、昼长较长。</p>
         </div>
 
         <div class="block">
           <h3>③ 时间推进</h3>
-          <RangeRow
-            label="地方太阳时"
-            :value="state.solarTime"
-            suffix="时"
-            :min="0"
-            :max="24"
-            :step="0.05"
-            :formatter="formatSolarTimeCompact"
-            @update:value="setSolarTimeFromUser($event)"
-          />
-          <RangeRow label="动画速度" :value="state.playSpeed" suffix="x" :min="0.2" :max="8" :step="0.2" @update:value="state.playSpeed = $event" />
+          <RangeRow label="地方太阳时" :value="state.solarTime" suffix="时" :min="0" :max="24" :step="0.05"
+            :formatter="formatSolarTimeCompact" @update:value="setSolarTimeFromUser($event)" />
+          <RangeRow label="动画速度" :value="state.playSpeed" suffix="x" :min="0.2" :max="8" :step="0.2"
+            @update:value="state.playSpeed = $event" />
           <div class="time-buttons">
             <button
               :class="{ active: !solarMetrics.polarType && isApprox(runtimeSolarTimeRef, solarMetrics.sunrise, 0.06) }"
-              :disabled="!!solarMetrics.polarType"
-              @click="setSafeSolarTime(solarMetrics.sunrise)"
-            >
+              :disabled="!!solarMetrics.polarType" @click="setSafeSolarTime(solarMetrics.sunrise)">
               日出
             </button>
-            <button :class="{ active: isApprox(runtimeSolarTimeRef, 12, 0.06) }" @click="setSolarTimeFromUser(12)">正午</button>
+            <button :class="{ active: isApprox(runtimeSolarTimeRef, 12, 0.06) }"
+              @click="setSolarTimeFromUser(12)">正午</button>
             <button
               :class="{ active: !solarMetrics.polarType && isApprox(runtimeSolarTimeRef, solarMetrics.sunset, 0.06) }"
-              :disabled="!!solarMetrics.polarType"
-              @click="setSafeSolarTime(solarMetrics.sunset)"
-            >
+              :disabled="!!solarMetrics.polarType" @click="setSafeSolarTime(solarMetrics.sunset)">
               日落
             </button>
           </div>
@@ -107,12 +99,8 @@
             <div class="player-model-select">
               <div class="model-select-title">玩家模型</div>
               <div class="model-buttons">
-                <button
-                  v-for="model in playerModelButtons"
-                  :key="model.key"
-                  :class="{ active: selectedPlayerModel === model.key }"
-                  @click="setPlayerModel(model.key)"
-                >
+                <button v-for="model in playerModelButtons" :key="model.key"
+                  :class="{ active: selectedPlayerModel === model.key }" @click="setPlayerModel(model.key)">
                   {{ model.label }}
                 </button>
               </div>
@@ -234,7 +222,8 @@
           <div class="formula-item">
             <b>昼长</b>
             <code>T = 2 × arccos(-tanφ·tanδ) / 15</code>
-            <span>{{ solarMetrics.polarType ? solarMetrics.polarType : `T=${formatHour(solarMetrics.dayLength)}` }}</span>
+            <span>{{ solarMetrics.polarType ? solarMetrics.polarType : `T=${formatHour(solarMetrics.dayLength)}`
+            }}</span>
           </div>
         </div>
 
@@ -273,8 +262,7 @@
             <li><b>方向规律：</b>影子永远指向太阳的反方向；太阳在东，影子向西；太阳在西，影子向东。</li>
             <li><b>长短规律：</b>太阳高度角越大，影子越短；清晨、傍晚高度角小，影子最长；正午通常最短。</li>
             <li>
-              <b>公式理解：</b>影长 L = 物高 H ÷ tan(h)。当前太阳高度下，1 米杆影长约为 <b>{{ oneMeterShadowText }}</b
-              >。
+              <b>公式理解：</b>影长 L = 物高 H ÷ tan(h)。当前太阳高度下，1 米杆影长约为 <b>{{ oneMeterShadowText }}</b>。
             </li>
             <li><b>3D观察：</b>场景里的黄色量角器显示太阳高度角 h。h 变大时，太阳更接近天顶，影子明显缩短；h 变小时，太阳贴近地平线，影子被拉长。</li>
             <li><b>课堂追问：</b>为什么同一栋建筑或同一根路灯杆，早晨和傍晚影子长，中午影子短？让学生同时看太阳高度角和影长变化。</li>
@@ -1839,7 +1827,7 @@ function initThree() {
   controls.dampingFactor = 0.08
   controls.target.set(0, 0.55, 0)
   controls.minDistance = 4.2
-  controls.maxDistance = 18
+  controls.maxDistance = 20
   controls.enablePan = false
   controls.update()
 
@@ -2119,12 +2107,12 @@ function createCityRoadNetwork() {
     schoolGroup.add(divider)
 
     const sideOffset = roadWidth * 0.5 + 0.15
-    ;[-sideOffset, sideOffset].forEach(offset => {
-      const walk = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.018, length), sidewalkMat)
-      walk.position.set(vertical ? x + offset : x, 0.092, vertical ? z : z + offset)
-      if (!vertical) walk.rotation.y = Math.PI / 2
-      schoolGroup.add(walk)
-    })
+      ;[-sideOffset, sideOffset].forEach(offset => {
+        const walk = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.018, length), sidewalkMat)
+        walk.position.set(vertical ? x + offset : x, 0.092, vertical ? z : z + offset)
+        if (!vertical) walk.rotation.y = Math.PI / 2
+        schoolGroup.add(walk)
+      })
   }
 
   roadOffsets.forEach(x => addRoad(x, 0, roadWidth, roadLength, true))
@@ -2553,15 +2541,15 @@ function createTrafficLight(x: number, z: number, seed = 0) {
   const red = new THREE.MeshBasicMaterial({ color: 0x6b1111 })
   const yellow = new THREE.MeshBasicMaterial({ color: 0x6b5a11 })
   const green = new THREE.MeshBasicMaterial({ color: 0x105c2d })
-  ;[
-    [red, 0.59],
-    [yellow, 0.52],
-    [green, 0.45],
-  ].forEach(([mat, y]) => {
-    const light = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 8), mat as THREE.MeshBasicMaterial)
-    light.position.set(0, y as number, -0.04)
-    group.add(light)
-  })
+    ;[
+      [red, 0.59],
+      [yellow, 0.52],
+      [green, 0.45],
+    ].forEach(([mat, y]) => {
+      const light = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 8), mat as THREE.MeshBasicMaterial)
+      light.position.set(0, y as number, -0.04)
+      group.add(light)
+    })
   schoolGroup.add(group)
   // 玩家碰撞体：红绿灯也在路口附近，防止角色直接穿过灯杆。
   addColliderBox(x, GROUND_SURFACE_Y + 0.34, z, 0.16, 0.68, 0.16)
@@ -2822,11 +2810,11 @@ function createLabels() {
     { text: '西 W', az: 270, color: '#ffe08a' },
   ]
   labels.forEach(item => {
-    const p = azimuthAltitudeToVec3(item.az, 0, GROUND_RADIUS + 0.38)
+    const p = azimuthAltitudeToVec3(item.az, 0, GROUND_RADIUS + 0.6)
     // 方位标签统一 15 号字，避免在场景里过大抢画面。
-    labelGroup.add(createLabelSpriteText(item.text, item.color, new THREE.Vector3(p.x, 0.18, p.z), 15, 1))
+    labelGroup.add(createLabelSpriteText(item.text, item.color, new THREE.Vector3(p.x, 0.18, p.z), 13, 1))
   })
-  labelGroup.add(createLabelSpriteText('天顶', '#ffffff', new THREE.Vector3(0, SKY_RADIUS + 0.28, 0), 15, 1))
+  labelGroup.add(createLabelSpriteText('天顶', '#ffffff', new THREE.Vector3(0, SKY_RADIUS + 0.28, 0), 13, 1))
 }
 
 function createSun() {
@@ -2946,11 +2934,19 @@ function rebuildSolarPaths() {
   clearGroup(pathGroup)
   if (!layers.paths) return
 
+  // 春秋分参考线要同时覆盖春分(80)和秋分(266)两个节气。
+  // 赤纬公式在两天并不严格等于 0°（春分约 -0.4°、秋分约 -1.0°），
+  // 若参考线固定画在第 80 天，秋分那天「当前路径」就会和「春秋分路径」错开。
+  // 因此让参考线在接近春分/秋分时跟随当前日期，保证两个节气都能和当前路径重叠；
+  // 其它日期仍退回第 80 天的标准春秋分参考弧。
+  const isNearEquinox = (target: number, range: number) => Math.abs(state.dayOfYear - target) <= range
+  const equinoxDay = isNearEquinox(266, 12) ? state.dayOfYear : isNearEquinox(80, 12) ? state.dayOfYear : 80
+
   const pathDefs = [
     { day: state.dayOfYear, name: `${dateLabel.value}路径`, color: 0xffd166, opacity: 1, radius: 0.018 },
-    { day: 172, name: '夏至路径', color: 0x3687ff, opacity: 0.78, radius: 0.011 },
-    { day: 80, name: '春秋分路径', color: 0xffffff, opacity: 0.62, radius: 0.01 },
-    { day: 355, name: '冬至路径', color: 0x45e8ff, opacity: 0.76, radius: 0.011 },
+    { day: 172, name: '夏至路径', color: 0xffd166, opacity: 0.8, radius: 0.011 },
+    { day: equinoxDay, name: '春秋分路径', color: 0xffd166, opacity: 0.8, radius: 0.01 },
+    { day: 355, name: '冬至路径', color: 0xffd166, opacity: 0.8, radius: 0.011 },
   ]
 
   pathDefs.forEach((def, index) => {
@@ -2967,8 +2963,8 @@ function rebuildSolarPaths() {
         mid
           .clone()
           .multiplyScalar(1.035)
-          .add(new THREE.Vector3(0, index === 0 ? 0.18 : 0, 0)),
-        index === 0 ? 0.28 : 0.22,
+          .add(new THREE.Vector3(0, index === 0 ? 0.5 : 0, 0)),
+        index === 0 ? 0.8 : 0.75,
       ),
     )
 
@@ -3006,7 +3002,7 @@ function createSmallMarker(position: THREE.Vector3, color: number, text: string)
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 8), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 }))
   mesh.position.copy(position)
   group.add(mesh)
-  group.add(createSpriteText(text, color === 0xffd166 ? '#ffdc82' : '#ffad96', position.clone().add(new THREE.Vector3(0, 0.22, 0)), 0.18))
+  group.add(createSpriteText(text, color === 0xffd166 ? '#ffdc82' : '#ffad96', position.clone().add(new THREE.Vector3(0, 0.22, 0)), 0.65))
   return group
 }
 
@@ -3137,9 +3133,9 @@ function updateAltitudeAngleGauge(metrics: SolarMetrics) {
       i === steps
         ? origin.clone().add(sunDir.clone().multiplyScalar(r * 0.78))
         : origin
-            .clone()
-            .add(horizontal.clone().multiplyScalar(Math.cos(degToRad((shownAltitude * i) / steps)) * r * 0.78))
-            .add(up.clone().multiplyScalar(Math.sin(degToRad((shownAltitude * i) / steps)) * r * 0.78))
+          .clone()
+          .add(horizontal.clone().multiplyScalar(Math.cos(degToRad((shownAltitude * i) / steps)) * r * 0.78))
+          .add(up.clone().multiplyScalar(Math.sin(degToRad((shownAltitude * i) / steps)) * r * 0.78))
     fanVertices.push(p.x, p.y, p.z)
   }
   const fanIndices: number[] = []
@@ -3179,7 +3175,7 @@ function updateAltitudeAngleGauge(metrics: SolarMetrics) {
     .clone()
     .add(horizontal.clone().multiplyScalar(Math.cos(degToRad(shownAltitude * 0.52)) * (r * 1.02)))
     .add(up.clone().multiplyScalar(Math.sin(degToRad(shownAltitude * 0.52)) * (r * 1.02) + 0.15))
-  altitudeAngleGroup.add(createSpriteText(`h=${formatDeg(metrics.altitude)}`, '#ffd166', labelPos, 0.18))
+  altitudeAngleGroup.add(createSpriteText(`h=${formatDeg(metrics.altitude)}`, '#ffd166', labelPos, 0.8))
   altitudeAngleGroup.add(createSpriteText('地平基准线', '#e5e7eb', horizonEnd.clone().add(new THREE.Vector3(0, 0.12, 0)), 0.11))
   altitudeAngleGroup.add(
     createSpriteText(
@@ -3345,17 +3341,25 @@ function makeTubeLine(points: THREE.Vector3[], color: number, radius = 0.01, opa
 }
 
 function createLabelSpriteText(text: string, color: string, position: THREE.Vector3, fontSize = 15, worldSize = 0.34) {
+  // 高清渲染：把小字号文字先画到高分辨率 canvas 上，再按需要的世界尺寸缩放。
+  // 旧版直接用 15px 字号画到约 100px 宽的 canvas 再拉伸成 worldSize≈1 的大 Sprite，
+  // 源纹理只有十几像素高，放大后「北/东/南/西」等方位标签就会发糊。
+  // 这里内部统一用高清字号绘制，用 measureText 精确量宽，世界尺寸保持不变，文字自然变清晰。
+  const renderFontSize = 96
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')!
-  const padding = Math.ceil(fontSize * 1.2)
-  canvas.width = Math.max(96, Math.ceil(text.length * fontSize * 1.25 + padding * 2))
-  canvas.height = Math.max(48, Math.ceil(fontSize * 2.6))
+
+  ctx.font = `900 ${renderFontSize}px Microsoft YaHei, Arial`
+  const textWidth = Math.ceil(ctx.measureText(text).width)
+  const padding = Math.ceil(renderFontSize * 0.55)
+  canvas.width = Math.max(64, textWidth + padding * 2)
+  canvas.height = Math.max(64, Math.ceil(renderFontSize * 1.9))
 
   ctx.clearRect(0, 0, canvas.width, canvas.height)
-  ctx.font = `900 ${fontSize}px Microsoft YaHei, Arial`
+  ctx.font = `900 ${renderFontSize}px Microsoft YaHei, Arial`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.lineWidth = Math.max(2, Math.round(fontSize * 0.18))
+  ctx.lineWidth = Math.max(4, Math.round(renderFontSize * 0.14))
   ctx.strokeStyle = 'rgba(0,0,0,0.72)'
   ctx.fillStyle = color
   ctx.strokeText(text, canvas.width / 2, canvas.height / 2)
@@ -3728,6 +3732,7 @@ onBeforeUnmount(() => {
   from {
     transform: translateY(-100%);
   }
+
   to {
     transform: translateY(100%);
   }
@@ -3755,6 +3760,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 13px;
 }
+
 .sun-logo {
   width: 44px;
   height: 44px;
@@ -3762,16 +3768,19 @@ onBeforeUnmount(() => {
   background: radial-gradient(circle at 35% 30%, #fff4bd, #ffd166 40%, #ff8a30 72%, #221309 100%);
   box-shadow: 0 0 30px rgba(255, 209, 102, 0.55);
 }
+
 .eyebrow {
   color: var(--cyan);
   font-size: 10px;
   letter-spacing: 0.14em;
 }
+
 h1 {
   margin: 2px 0 0;
   font-size: 16px;
   line-height: 1.1;
 }
+
 .top-actions {
   display: flex;
   align-items: center;
@@ -3788,10 +3797,12 @@ button {
   transition: 0.18s ease;
   font-size: 10.5px;
 }
+
 button:hover {
   transform: translateY(-1px);
   border-color: rgba(255, 209, 102, 0.65);
 }
+
 button.active {
   color: #101722;
   border-color: rgba(255, 209, 102, 0.85);
@@ -3799,6 +3810,7 @@ button.active {
   box-shadow: 0 0 22px rgba(255, 209, 102, 0.35);
   font-weight: 900;
 }
+
 button.ghost {
   background: rgba(14, 30, 52, 0.55);
 }
@@ -3847,6 +3859,7 @@ button.ghost {
   font-weight: 900;
   font-size: 11px;
 }
+
 .panel-title span {
   width: 10px;
   height: 10px;
@@ -3865,6 +3878,7 @@ button.ghost {
   border: 1px solid rgba(125, 211, 252, 0.14);
   background: rgba(8, 22, 40, 0.66);
 }
+
 .block h3,
 .knowledge-card h3,
 .summary-card h3 {
@@ -3878,6 +3892,7 @@ button.ghost {
   width: 100%;
   margin: 10px 0 14px;
 }
+
 .range-head {
   width: 100%;
   display: grid !important;
@@ -3887,6 +3902,7 @@ button.ghost {
   margin-bottom: 8px;
   line-height: 1;
 }
+
 .range-label {
   min-width: 0;
   overflow: hidden;
@@ -3897,6 +3913,7 @@ button.ghost {
   font-weight: 800;
   letter-spacing: 0.02em;
 }
+
 .range-value {
   justify-self: end;
   min-width: 58px;
@@ -3920,16 +3937,19 @@ button.ghost {
     0 0 14px rgba(255, 209, 102, 0.42),
     inset 0 0 0 1px rgba(255, 255, 255, 0.42);
 }
+
 .range-slider {
   width: 100%;
   margin-top: 0;
 }
+
 .range-slider :deep(.el-slider) {
   --el-slider-main-bg-color: transparent;
   --el-slider-runway-bg-color: transparent;
   --el-slider-stop-bg-color: transparent;
   width: 100%;
 }
+
 .range-slider :deep(.el-slider__runway) {
   height: 7px;
   margin: 11px 0 5px;
@@ -3939,17 +3959,20 @@ button.ghost {
     inset 0 0 0 1px rgba(255, 255, 255, 0.2),
     0 0 12px rgba(251, 146, 60, 0.16);
 }
+
 .range-slider :deep(.el-slider__bar) {
   height: 7px;
   border-radius: 999px;
   background: linear-gradient(90deg, #fb923c 0%, #facc15 48%, #fb7185 78%, #8b5cf6 100%);
   box-shadow: 0 0 12px rgba(250, 204, 21, 0.36);
 }
+
 .range-slider :deep(.el-slider__button-wrapper) {
   top: -15px;
   width: 30px;
   height: 30px;
 }
+
 .range-slider :deep(.el-slider__button) {
   width: 15px;
   height: 15px;
@@ -3966,6 +3989,7 @@ button.ghost {
   --el-slider-stop-bg-color: transparent !important;
   --el-color-primary: #ffd166 !important;
 }
+
 :global(.solar-motion-page .range-slider.el-slider .el-slider__runway) {
   height: 7px !important;
   border-radius: 999px !important;
@@ -3974,21 +3998,22 @@ button.ghost {
     inset 0 0 0 1px rgba(255, 255, 255, 0.24),
     0 0 12px rgba(250, 204, 21, 0.2) !important;
 }
+
 :global(.solar-motion-page .range-slider.el-slider .el-slider__bar) {
   height: 7px !important;
   border-radius: 999px !important;
-  background: linear-gradient(
-    90deg,
-    rgba(59, 130, 246, 0.36),
-    rgba(251, 146, 60, 0.42),
-    rgba(250, 204, 21, 0.48),
-    rgba(251, 113, 133, 0.42)
-  ) !important;
+  background: linear-gradient(90deg,
+      rgba(59, 130, 246, 0.36),
+      rgba(251, 146, 60, 0.42),
+      rgba(250, 204, 21, 0.48),
+      rgba(251, 113, 133, 0.42)) !important;
   box-shadow: 0 0 12px rgba(255, 209, 102, 0.28) !important;
 }
+
 :global(.solar-motion-page .range-slider.el-slider .el-slider__button-wrapper) {
   top: -15px !important;
 }
+
 :global(.solar-motion-page .range-slider.el-slider .el-slider__button) {
   width: 15px !important;
   height: 15px !important;
@@ -4004,43 +4029,51 @@ button.ghost {
   grid-template-columns: repeat(2, 1fr);
   gap: 7px;
 }
+
 .grid-4 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   margin-bottom: 12px;
 }
+
 .view-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 7px;
 }
+
 .time-buttons {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 7px;
   margin-top: 10px;
 }
+
 .tip,
 .knowledge-card li {
   color: var(--muted);
   font-size: 9.6px;
   line-height: 1.58;
 }
-.block > .tip {
+
+.block>.tip {
   margin: 15px 0 0;
   padding-top: 10px;
   border-top: 1px solid rgba(125, 211, 252, 0.1);
 }
-.block .grid-2 + .tip,
-.block .grid-4 + .tip,
-.block .view-grid + .tip,
-.block .time-buttons + .tip {
+
+.block .grid-2+.tip,
+.block .grid-4+.tip,
+.block .view-grid+.tip,
+.block .time-buttons+.tip {
   margin-top: 14px;
 }
-.block .grid-4 + .range-row {
+
+.block .grid-4+.range-row {
   margin-top: 2px;
 }
+
 .left-panel .grid-2 button.active,
 .left-panel .grid-4 button.active,
 .left-panel .view-grid button.active,
@@ -4053,6 +4086,7 @@ button.ghost {
     inset 0 0 0 1px rgba(255, 255, 255, 0.32);
   font-weight: 900;
 }
+
 .check-row {
   display: flex;
   align-items: center;
@@ -4062,6 +4096,7 @@ button.ghost {
   font-size: 9.8px;
   line-height: 1.35;
 }
+
 .check-row input {
   accent-color: #ffd166;
 }
@@ -4073,6 +4108,7 @@ button.ghost {
   font-weight: 900;
   letter-spacing: 0.05em;
 }
+
 .fp-tip {
   margin: 6px 0 8px;
   padding: 7px 8px;
@@ -4083,6 +4119,7 @@ button.ghost {
   background: rgba(77, 220, 255, 0.08);
   border: 1px solid rgba(77, 220, 255, 0.14);
 }
+
 .student-fp-controls {
   margin-top: 10px;
   padding: 10px;
@@ -4103,6 +4140,7 @@ button.ghost {
     inset 0 0 80px rgba(77, 220, 255, 0.07),
     inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
+
 .stage-card::before {
   content: '';
   position: absolute;
@@ -4115,6 +4153,7 @@ button.ghost {
     inset 0 0 28px rgba(77, 220, 255, 0.08),
     0 0 30px rgba(77, 220, 255, 0.08);
 }
+
 .stage-card::after {
   content: '';
   position: absolute;
@@ -4126,6 +4165,7 @@ button.ghost {
   pointer-events: none;
   background: linear-gradient(90deg, transparent, rgba(255, 209, 102, 0.5), rgba(77, 220, 255, 0.55), transparent);
 }
+
 .canvas-wrap {
   touch-action: none;
   user-select: none;
@@ -4133,11 +4173,13 @@ button.ghost {
   inset: 0;
   min-height: 420px;
 }
+
 .canvas-wrap :deep(canvas) {
   display: block;
   width: 100%;
   height: 100%;
 }
+
 .stage-card:has(.canvas-wrap) {
   outline: 1px solid rgba(77, 220, 255, 0.05);
 }
@@ -4151,12 +4193,14 @@ button.ghost {
   pointer-events: none;
   text-shadow: 0 4px 18px rgba(0, 0, 0, 0.65);
 }
+
 .scene-title b {
   display: block;
   color: var(--gold);
   font-size: 18px;
   margin-bottom: 6px;
 }
+
 .scene-title span {
   color: #dceeff;
   font-size: 11.5px;
@@ -4171,28 +4215,33 @@ button.ghost {
   backdrop-filter: blur(14px);
   box-shadow: 0 14px 44px rgba(0, 0, 0, 0.32);
 }
+
 .legend-title,
 .card-head {
   color: var(--gold);
   font-weight: 900;
   margin-bottom: 10px;
 }
+
 .small-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+
 .small-grid div {
   padding: 8px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.05);
 }
+
 .small-grid span {
   display: block;
   color: var(--muted);
   font-size: 11px;
   margin-bottom: 4px;
 }
+
 .small-grid b {
   color: #eaf6ff;
   font-size: 11.5px;
@@ -4207,6 +4256,7 @@ button.ghost {
   font-size: 11.5px;
   line-height: 1.9;
 }
+
 .dot {
   display: inline-block;
   width: 10px;
@@ -4214,30 +4264,37 @@ button.ghost {
   border-radius: 50%;
   margin-right: 7px;
 }
+
 .dot.yellow {
   background: #ffd166;
   box-shadow: 0 0 10px #ffd166;
 }
+
 .dot.current {
   background: #ffb02e;
   box-shadow: 0 0 12px #ffb02e;
 }
+
 .dot.blue {
   background: #3687ff;
   box-shadow: 0 0 10px #3687ff;
 }
+
 .dot.white {
   background: #ffffff;
   box-shadow: 0 0 10px #ffffff;
 }
+
 .dot.cyan {
   background: #45e8ff;
   box-shadow: 0 0 10px #45e8ff;
 }
+
 .dot.shadow {
   background: rgba(0, 0, 0, 0.55);
   border: 1px solid #999;
 }
+
 .dot.playground {
   background: #c9634a;
   box-shadow: 0 0 10px rgba(201, 99, 74, 0.8);
@@ -4246,6 +4303,7 @@ button.ghost {
 .data-card {
   background: linear-gradient(180deg, rgba(15, 43, 75, 0.82), rgba(7, 21, 38, 0.72));
 }
+
 .big-row {
   display: flex;
   align-items: center;
@@ -4253,32 +4311,39 @@ button.ghost {
   padding: 10px 0;
   border-bottom: 1px solid rgba(125, 211, 252, 0.12);
 }
+
 .big-row span {
   color: var(--muted);
 }
+
 .big-row b {
   color: var(--gold);
   font-size: 22px;
 }
+
 .knowledge-card ol,
 .knowledge-card ul {
   margin: 0;
   padding-left: 18px;
 }
+
 .knowledge-card {
   padding: 11px 12px;
 }
+
 .knowledge-card h3 {
   margin-bottom: 10px;
   color: #f8fbff;
   text-shadow: 0 0 14px rgba(125, 211, 252, 0.18);
 }
+
 .knowledge-card p {
   margin: 7px 0;
   color: #c8d9ee;
   font-size: 10px;
   line-height: 1.72;
 }
+
 .knowledge-card li {
   margin: 6px 0;
   padding-left: 2px;
@@ -4286,6 +4351,7 @@ button.ghost {
   font-size: 9.8px;
   line-height: 1.68;
 }
+
 .knowledge-card b,
 .knowledge-card strong,
 .formula-item b {
@@ -4293,6 +4359,7 @@ button.ghost {
   font-weight: 950;
   text-shadow: 0 0 12px rgba(255, 209, 102, 0.32);
 }
+
 .knowledge-card code,
 .formula-item code {
   color: #8ee7ff;
@@ -4301,13 +4368,16 @@ button.ghost {
   border-radius: 6px;
   padding: 1px 4px;
 }
+
 .formula-card {
   background: rgba(5, 17, 31, 0.66);
 }
+
 .shadow-explain-card {
   border-color: rgba(255, 209, 102, 0.24);
   background: linear-gradient(180deg, rgba(255, 209, 102, 0.09), rgba(5, 17, 31, 0.66));
 }
+
 .formula-item {
   display: grid;
   grid-template-columns: 60px minmax(0, 1fr);
@@ -4316,9 +4386,11 @@ button.ghost {
   padding: 9px 0;
   border-top: 1px dashed rgba(125, 211, 252, 0.13);
 }
+
 .formula-item b {
   color: #ffffff;
 }
+
 .formula-item code {
   color: #bcecff;
   font-family: 'JetBrains Mono', Consolas, monospace;
@@ -4326,22 +4398,26 @@ button.ghost {
   white-space: normal;
   word-break: break-word;
 }
+
 .formula-item span {
   grid-column: 2;
   color: var(--muted);
   font-size: 11.5px;
 }
+
 .summary-card table {
   width: 100%;
   border-collapse: collapse;
   font-size: 11.5px;
 }
+
 .summary-card th,
 .summary-card td {
   border: 1px solid rgba(125, 211, 252, 0.14);
   padding: 8px;
   text-align: center;
 }
+
 .summary-card th {
   color: var(--gold);
   background: rgba(255, 255, 255, 0.05);
@@ -4359,9 +4435,11 @@ button.ghost {
     min-height: 100vh;
     overflow: auto;
   }
+
   .layout {
     grid-template-columns: 1fr;
   }
+
   .stage-card {
     height: 720px;
   }
@@ -4565,7 +4643,7 @@ button.ghost {
 button,
 .check-row,
 .range-row,
-.small-grid > div,
+.small-grid>div,
 table,
 th,
 td {
